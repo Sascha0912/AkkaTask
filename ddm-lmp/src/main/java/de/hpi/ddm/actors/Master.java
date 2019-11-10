@@ -12,7 +12,6 @@ import akka.actor.Terminated;
 import de.hpi.ddm.structures.BloomFilter;
 import lombok.Data;
 
-// test johannes
 public class Master extends AbstractLoggingActor {
 
 	////////////////////////
