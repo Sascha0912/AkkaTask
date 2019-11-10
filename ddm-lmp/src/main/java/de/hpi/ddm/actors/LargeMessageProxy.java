@@ -2,10 +2,12 @@ package de.hpi.ddm.actors;
 
 import java.io.Serializable;
 
+import akka.NotUsed;
 import akka.actor.AbstractLoggingActor;
 import akka.actor.ActorRef;
 import akka.actor.ActorSelection;
 import akka.actor.Props;
+import akka.stream.javadsl.Source;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -72,6 +74,14 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		// 2. Serialize the object and send its bytes via Akka streaming.
 		// 3. Send the object via Akka's http client-server component.
 		// 4. Other ideas ...
+		BytesMessage<?> msg = new BytesMessage<>(message.getMessage(), this.sender(), message.getReceiver());
+		System.out.println("TESTOUT: "+msg.bytes);
+
+		// Use Akka Streaming
+		Source<LargeMessage<?>, NotUsed> src;
+		src = Source.single(message);
+
+
 		receiverProxy.tell(new BytesMessage<>(message.getMessage(), this.sender(), message.getReceiver()), this.self());
 	}
 

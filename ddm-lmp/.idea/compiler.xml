@@ -9,9 +9,12 @@
         <module name="ddm-lmp" />
       </profile>
     </annotationProcessing>
+<<<<<<< HEAD
     <bytecodeTargetLevel>
       <module name="ddm-lmp" target="1.8" />
     </bytecodeTargetLevel>
+=======
+>>>>>>> a2d2dc9177c0a54cb9b095d10259ff5d7be7154d
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
