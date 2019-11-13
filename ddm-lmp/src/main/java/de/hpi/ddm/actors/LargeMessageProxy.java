@@ -2,6 +2,7 @@ package de.hpi.ddm.actors;
 
 import java.io.*;
 import java.util.Arrays;
+import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.*;
 
@@ -50,6 +51,11 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		private T bytes;
 		private ActorRef sender;
 		private ActorRef receiver;
+
+		// added
+		//private
+		//private long uuid;
+		//private short id;
 	}
 	
 	/////////////////
@@ -158,9 +164,18 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 		ObjectOutputStream stream = null; // check if init necessary
 
+
 		// define how many blocks the message consists of
 		// hardcoded -> bad solution!!
 		int block_size = 4096; // 4KB
+
+		// generate UUID
+		UUID uuid = UUID.randomUUID();
+		long message_id = uuid.getMostSignificantBits();
+
+
+
+
 
 		try {
 			stream = new ObjectOutputStream(outputStream);
@@ -170,21 +185,28 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 			byte[] bytes = outputStream.toByteArray();
 			int byte_length = bytes.length;
 
-			System.out.println(bytes);
+			//System.out.println(bytes);
 
 			int block_pointer = 0;
 			boolean last = false;
 
+			short block_id = 0;
+
 			while (true) {
 				BytesMessage<byte[]> block = new BytesMessage<>();
+
+
 				if (block_pointer+block_size>byte_length) {
 					block.bytes = Arrays.copyOfRange(bytes,block_pointer,byte_length);
 					last = true;
 				} else {
 					block.bytes = Arrays.copyOfRange(bytes, block_pointer, block_pointer + block_size);
 				}
+
+				block.uuid = message_id;
 				block.sender = this.sender();
 				block.receiver = receiver;
+				block.id = block_id;
 
 				// tell receiver
 				receiverProxy.tell(block,this.self());
@@ -238,6 +260,14 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		// Reassemble the message content, deserialize it and/or load the content from some local location before forwarding its content.
 		//Sink<BytesMessage<?>, NotUsed> snk = Sink
 		//message.getReceiver().tell(message.getBytes(), message.getSender());
+
+		ByteArrayInputStream in = new ByteArrayInputStream((byte[])message.bytes);
+		ObjectInputStream in_stream = new ObjectInputStream(in);
+		System.out.println(in);
+
+
+
+
 		byte[] msg = (byte[]) message.bytes;
 		System.out.println("HIER SCHAUEN: "+msg);
 	}
