@@ -1,8 +1,7 @@
 package de.hpi.ddm.actors;
 
 import java.io.*;
-import java.util.Arrays;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.*;
 
@@ -27,6 +26,11 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 	////////////////////////
 	// Actor Construction //
 	////////////////////////
+
+
+	private Map<String,LargeMessage<?>> messages = new HashMap<>();
+
+	//private List<BytesMessage<?>> messages = new ArrayList<>();
 
 	public static final String DEFAULT_NAME = "largeMessageProxy";
 	
@@ -53,9 +57,9 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		private ActorRef receiver;
 
 		// added
-		//private
-		//private long uuid;
-		//private short id;
+		private long uuid;
+		private short id;
+		private short max_id;
 	}
 	
 	/////////////////
@@ -169,21 +173,27 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		// hardcoded -> bad solution!!
 		int block_size = 4096; // 4KB
 
-		// generate UUID
 		UUID uuid = UUID.randomUUID();
 		long message_id = uuid.getMostSignificantBits();
-
-
-
-
 
 		try {
 			stream = new ObjectOutputStream(outputStream);
 			stream.writeObject(message);
 			stream.flush();
 
+
+			// Message
 			byte[] bytes = outputStream.toByteArray();
+			// generate UUID
+
+			//stream.writeObject(message_id);
+			//byte[] bytes_uuid = outputStream.toByteArray();
+			//Actor
+			//stream.writeObject();
+
 			int byte_length = bytes.length;
+
+			short max_id = (short) Math.ceil(byte_length/block_size);
 
 			//System.out.println(bytes);
 
@@ -207,6 +217,7 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 				block.sender = this.sender();
 				block.receiver = receiver;
 				block.id = block_id;
+				block.max_id = max_id;
 
 				// tell receiver
 				receiverProxy.tell(block,this.self());
@@ -259,14 +270,41 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 	private void handle(BytesMessage<?> message) {
 		// Reassemble the message content, deserialize it and/or load the content from some local location before forwarding its content.
 		//Sink<BytesMessage<?>, NotUsed> snk = Sink
-		//message.getReceiver().tell(message.getBytes(), message.getSender());
+		//
 
-		ByteArrayInputStream in = new ByteArrayInputStream((byte[])message.bytes);
-		ObjectInputStream in_stream = new ObjectInputStream(in);
-		System.out.println(in);
+		short max_id = message.max_id;
+
+		ByteArrayInputStream in = new ByteArrayInputStream((byte[]) message.bytes);
 
 
 
+
+
+		try {
+			ObjectInputStream in_stream = new ObjectInputStream(in);
+			LargeMessage<?> orig = (LargeMessage<?>) in_stream.readObject();
+			//messages
+			messages.put(""+message.uuid+"_"+message.id, orig);
+			message.getReceiver().tell(message.getBytes(), message.getSender());
+
+		} catch (IOException | ClassNotFoundException e) {
+			e.printStackTrace();
+		}
+		//System.out.println(in);
+
+
+		if (max_id == this.messages.size()) {
+			//iteriere durch die hashmap
+			for (int i = 0; i<max_id; i++) {
+				messages.
+			}
+			//baue schlüssel auseinander
+			//behalte nur die mit der uuid von oben
+
+			//sortiere nach der id
+			//baue die messages zusammen
+
+		}
 
 		byte[] msg = (byte[]) message.bytes;
 		System.out.println("HIER SCHAUEN: "+msg);
