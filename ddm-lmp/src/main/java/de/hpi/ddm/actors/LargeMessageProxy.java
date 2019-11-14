@@ -31,10 +31,13 @@ public class LargeMessageProxy extends AbstractLoggingActor {
     ////////////////////////
 
     public static final String DEFAULT_NAME = "largeMessageProxy";
-    private static final int MAX_ALLOWED_STREAM_SIZE = 260000;
-    private final StreamRefResolver streamRefResolver = StreamRefResolver.get(this.context().system());
-    private final Materializer materializer = Materializer.apply(this.context().system());
+    
+    
+    private final StreamRefResolver stream_reference_resolver= StreamRefResolver.get(this.context().system());
+    private final Materializer mat = Materializer.apply(this.context().system());
 
+
+    private static final int STREAM_SIZE = 260000; // 26kB
     public static Props props() {
         return Props.create(LargeMessageProxy.class);
     }
@@ -47,7 +50,7 @@ public class LargeMessageProxy extends AbstractLoggingActor {
     public Receive createReceive() {
         return receiveBuilder()
                 .match(LargeMessage.class, this::handle)
-                .match(MessageWrapper.class, this::handle)
+                .match(Wrapper.class, this::handle)
                 .matchAny(object -> this.log().info("Received unknown message: \"{}\"", object.toString()))
                 .build();
     }
@@ -56,40 +59,54 @@ public class LargeMessageProxy extends AbstractLoggingActor {
         ActorRef receiver = message.getReceiver();
         ActorSelection receiverProxy = this.context().actorSelection(receiver.path().child(DEFAULT_NAME));
 
-        try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
-             ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+        try (
+            // create a ByteArrayStream -> required for ObjectOutputStream
+            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
 
-            // Call Kryo Serializer
-            Output output = new Output(oos);
+            // ObjectOutputStream receives a reference to the ByteArrayOutput Stream
+            ObjectOutputStream objectOutputStream = new ObjectOutputStream(byteArrayOutputStream)) {
+
+
+
+            // Create a new Output based on the ObjectOutputStream
+            Output output = new Output(objectOutputStream);
+
+            // Create a new Kryo Object to serialize the message and write it to the Output
             Kryo kryo = new Kryo();
             kryo.writeClassAndObject(output, message.getMessage());
-
-            // Need to call .close() before toByteArry to avoid “KryoException: Buffer underflow”
             output.flush();
             output.close();
 
             // message in Bytes
-            byte[] byteArray = bos.toByteArray();
-            this.log().info("Byte Array Length: " + byteArray.length);
+            byte[] message_in_bytes = byteArrayOutputStream.toByteArray();
+            //this.log().info("Byte Array Length: " + message_in_bytes.length);
 
-            // Create chunks with ids for sort
-            List<Node> noteList = new ArrayList<>();
-            int counter = 1;
-            for (int i = 0; i < byteArray.length; i += (MAX_ALLOWED_STREAM_SIZE + 1)) {
-                int max = i + MAX_ALLOWED_STREAM_SIZE;
-                if (i + MAX_ALLOWED_STREAM_SIZE >= byteArray.length)
-                    max = byteArray.length - 1;
-                noteList.add(new Node(counter++, Arrays.copyOfRange(byteArray, i, max + 1)));
+
+
+            // Generate an empty list to hold Chunks
+            List<Chunk> chunks = new ArrayList<>();
+            // Create Counter variable
+            int cnt = 1;
+
+            for (int i = 0; i < message_in_bytes.length; i += (STREAM_SIZE + 1)) {
+                int max = i + STREAM_SIZE;
+
+                if (i + STREAM_SIZE >= message_in_bytes.length) {
+                    max = message_in_bytes.length - 1;
+                }
+                // add new Chunk to the list of chunks
+                chunks.add(new Chunk(cnt++, Arrays.copyOfRange(message_in_bytes, i, max + 1)));
             }
 
-            // Akka Streams Source -> Graph -> Sink
-            Source<Node, NotUsed> streamLogs = Source.from(noteList);
-            SourceRef<Node> sourceRef = streamLogs.runWith(StreamRefs.sourceRef(), materializer);
+            // Using the Akka Streaming Module to build a Source Object out of the list of chunks
+            Source<Chunk, NotUsed> streamLogs = Source.from(chunks);
+            SourceRef<Chunk> sourceRef = streamLogs.runWith(StreamRefs.sourceRef(), mat);
 
-            // SourceRef Wrapper
-            receiverProxy.tell(new MessageWrapper(this.streamRefResolver.toSerializationFormat(sourceRef), this.sender(), receiver), this.self());
+            // tell the receiver proxy
+            receiverProxy.tell(new Wrapper(this.stream_reference_resolver.toSerializationFormat(sourceRef), this.sender(), receiver), this.self());
         } catch (IOException e) {
-            this.log().error(e, e.getMessage());
+            e.printStackTrace();
+            //this.log().error(e, e.getMessage());
         }
     }
 
@@ -105,21 +122,21 @@ public class LargeMessageProxy extends AbstractLoggingActor {
     // Actor Behavior //
     ////////////////////
 
-    private void handle(MessageWrapper message) {
-        ArrayList<Node> nodes = new ArrayList<>();
-        this.streamRefResolver.resolveSourceRef(message.getSourceRef())
+    private void handle(Wrapper message) {
+        ArrayList<Chunk> nodes = new ArrayList<>();
+        this.stream_reference_resolver.resolveSourceRef(message.getSourceRef())
                 .getSource()
-                .runWith(Sink.foreach(e -> nodes.add((Node) e)), materializer)
+                .runWith(Sink.foreach(e -> nodes.add((Chunk) e)), mat)
                 .thenAccept((f) -> {
                     // Sort Nodes for the correct order
-                    nodes.sort(Node::compareTo);
+                    nodes.sort(Chunk::compareTo);
 
-                    // merging all byte arrays
+                    // combine all the arrays
                     byte[] result = {};
-                    for (Node node : nodes) {
+                    for (Chunk node : nodes) {
                         result = ArrayUtils.addAll(result, node.getByteArray());
                     }
-                    this.log().info("Received Byte Array Length: " + result.length);
+                    //this.log().info("Received Byte Array Length: " + result.length);
 
                     try (ByteArrayInputStream inputStream = new ByteArrayInputStream(result);
                          ObjectInputStream ois = new ObjectInputStream(inputStream);
@@ -130,9 +147,11 @@ public class LargeMessageProxy extends AbstractLoggingActor {
                         message.getReceiver().tell(kryo.readClassAndObject(input), message.getSender());
                         this.log().info("Message send");
                     } catch (IOException e) {
-                        this.log().error("Stream Error {}", e.getMessage());
+                        e.printStackTrace();
+                        //this.log().error("Stream Error {}", e.getMessage());
                     } catch (Exception e) {
-                        this.log().error(e, e.getMessage());
+                        e.printStackTrace();
+                        //this.log().error(e, e.getMessage());
                     }
                 });
     }
@@ -149,7 +168,7 @@ public class LargeMessageProxy extends AbstractLoggingActor {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
-    private static class MessageWrapper implements Serializable {
+    private static class Wrapper implements Serializable {
         private static final long serialVersionUID = 5707807743872319842L;
         private String sourceRef;
         private ActorRef sender;
@@ -159,13 +178,13 @@ public class LargeMessageProxy extends AbstractLoggingActor {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class Node implements Serializable, Comparable<Node> {
+    public static class Chunk implements Serializable, Comparable<Chunk> {
         private static final long serialVersionUID = 4557807743872319842L;
         private int key;
         private byte[] byteArray;
 
         @Override
-        public int compareTo(Node o) {
+        public int compareTo(Chunk o) {
             return Integer.compare(this.key, o.getKey());
         }
     }
