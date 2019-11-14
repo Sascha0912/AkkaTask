@@ -2,26 +2,15 @@ package de.hpi.ddm.actors;
 
 import java.io.*;
 import java.util.*;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
-import akka.Done;
-import akka.NotUsed;
 import akka.actor.*;
-import akka.event.LoggingAdapter;
-import akka.stream.*;
-import akka.stream.javadsl.Flow;
-import akka.stream.javadsl.Sink;
-import akka.stream.javadsl.Source;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Output;
 import de.hpi.ddm.structures.KryoPoolSingleton;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import scala.concurrent.ExecutionContextExecutor;
-import scala.concurrent.duration.FiniteDuration;
 
 public class LargeMessageProxy extends AbstractLoggingActor {
 
@@ -36,6 +25,23 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 	//private List<BytesMessage<?>> messages = new ArrayList<>();
 
 	public static final String DEFAULT_NAME = "largeMessageProxy";
+	// define how many blocks the message consists of
+	// hardcoded -> bad solution!!
+	public static final short BLOCK_SIZE = 2048; // 2KB
+
+
+
+	private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
+
+	public static String bytesToHex(byte[] bytes) {
+		char[] hexChars = new char[bytes.length * 2];
+		for (int j = 0; j < bytes.length; j++) {
+			int v = bytes[j] & 0xFF;
+			hexChars[j * 2] = HEX_ARRAY[v >>> 4];
+			hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
+		}
+		return new String(hexChars);
+	}
 
 	public static Props props() {
 		return Props.create(LargeMessageProxy.class);
@@ -66,7 +72,7 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		// added
 		private long uuid;
 		private short id;
-		private short max_id;
+		private short max_id = 0;
 		private short length;
 	}
 
@@ -176,11 +182,6 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 		ObjectOutputStream stream = null; // check if init necessary
 
-
-		// define how many blocks the message consists of
-		// hardcoded -> bad solution!!
-		short block_size = 2048; // 2KB
-
 		UUID uuid = UUID.randomUUID();
 		long message_id = uuid.getMostSignificantBits();
 
@@ -191,13 +192,14 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 
 			// Message
 			byte[] bytes = outputStream.toByteArray();
+			System.out.println(bytesToHex(bytes));
 
 			int byte_length = bytes.length;
 
 			// max id = amount of chunks-1
 			System.out.println("Byte_length: " + byte_length);
-			System.out.println("block_size: " + block_size);
-			short max_id = (short) Math.ceil(byte_length / block_size);
+			System.out.println("block_size: " + BLOCK_SIZE);
+			short max_id = (short) Math.ceil(byte_length / BLOCK_SIZE);
 
 			// current block pointer (bytes)
 			int block_pointer = 0;
@@ -207,18 +209,19 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 			short block_id = 0;
 
 			while (true) {
+				//stream.flush();
 				BytesMessage<byte[]> block = new BytesMessage<>();
 
-				if (block_pointer + block_size > byte_length) {
+				if (block_pointer + BLOCK_SIZE > byte_length) {
 					block.bytes = Arrays.copyOfRange(bytes, block_pointer, byte_length);
 					// TODO: cast is bad
 					block.length = (short) (byte_length - block_pointer);
 					last = true;
 				} else {
-					block.bytes = Arrays.copyOfRange(bytes, block_pointer, block_pointer + block_size);
-					block.length = block_size;
+					block.bytes = Arrays.copyOfRange(bytes, block_pointer, block_pointer + BLOCK_SIZE);
+					block.length = BLOCK_SIZE;
 				}
-
+				/*
 				block.uuid = message_id;
 				System.out.println("UUID: "+block.uuid);
 				block.sender = this.sender();
@@ -230,14 +233,14 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 				block.max_id = max_id;
 				System.out.println("MAX_ID: "+block.max_id);
 				System.out.println("LENGTH: "+block.length);
-
+				*/
 				// tell receiver
 				receiverProxy.tell(block, this.self());
 				if (last) {
 					break;
 				}
 				// update block_pointer
-				block_pointer = block_pointer + block_size;
+				block_pointer = block_pointer + BLOCK_SIZE;
 				block_id++;
 
 			}
@@ -280,11 +283,12 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 
 
 	Map<Long, Map<Short, byte[]>> map = new HashMap<>();
+	int array_size = 0;
+
 
 	private void handle(BytesMessage<?> message) {
 		// Reassemble the message content, deserialize it and/or load the content from some local location before forwarding its content.
 		//Sink<BytesMessage<?>, NotUsed> snk = Sink
-
 
 		// write uuid to Map
 		if (!map.containsKey(message.uuid)) {
@@ -294,7 +298,7 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		// to inner map
 		Map<Short, byte[]> inner_map = map.get(message.uuid);
 		inner_map.put(message.id, (byte[]) message.bytes);
-
+		array_size = array_size + message.length;
 
 		//for (Map.Entry<Short, byte[]> entry : inner_map.entrySet()) {
 		//	System.out.println(entry.getKey() + ":" + entry.getValue().toString());
@@ -314,11 +318,23 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		// == if received chunk has same id as max_id
 		if (message.max_id == message.id) {
 
-			// right now it is required that last received byte is last byte of message
-			byte[] complete_message = new byte[message.max_id+1*2048];
+			// all chunks are received
+			/*
+			inner_map.entrySet().forEach(entry->{
+				System.out.println(entry.getKey() + " " + entry.getValue());
+			});
+			*/
 
-			for (int i=0; i<message.max_id+1; i++) {
-				Short index = innermap_as_list.get(i);
+
+
+
+			// right now it is required that last received byte is last byte of message
+			// OK - complete_message has correct size
+			byte[] complete_message = new byte[array_size];
+			//System.out.println("TEST_HERE: "+complete_message.length);
+
+			for (Short i : innermap_as_list) {
+				//Short index = innermap_as_list.get(i);
 				// block_size = 2048 -> TODO: hardcoded right now
 				/*
 				System.out.println("########################");
@@ -330,17 +346,27 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 				*/
 				//System.arraycopy();
 				// hier weiter
-				System.arraycopy(inner_map.get(index),0, complete_message,index*2048, inner_map.get(index).length);
+				System.arraycopy(inner_map.get(i),0, complete_message,i*BLOCK_SIZE, inner_map.get(i).length);
 			}
+			System.out.println(bytesToHex(complete_message));
+			// view content of complete message
+			//for (int i = 0; i<array_size;i++){
+				//int positive = complete_message[i] & 0xff;
+
+			//}
+
+
 			ByteArrayInputStream bytes_in = new ByteArrayInputStream(complete_message);
 			try {
 				ObjectInputStream object_in = new ObjectInputStream(bytes_in);
+
+				Object o = object_in.readObject();
 
 				Object s = KryoPoolSingleton.get().fromBytes(complete_message);
 
 				System.out.println(s);
 				message.getReceiver().tell(s, message.getSender());
-			} catch (IOException e) {
+			} catch (IOException | ClassNotFoundException e) {
 				e.printStackTrace();
 			}
 		}
