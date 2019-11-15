@@ -79,8 +79,8 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 
             // message in Bytes
             byte[] message_in_bytes = byteArrayOutputStream.toByteArray();
-            //this.log().info("Byte Array Length: " + message_in_bytes.length);
-
+            System.out.println(message_in_bytes.length);
+            System.out.println(STREAM_SIZE);
 
 
             // Generate an empty list to hold Chunks
@@ -88,14 +88,19 @@ public class LargeMessageProxy extends AbstractLoggingActor {
             // Create Counter variable
             int cnt = 1;
 
+
             for (int i = 0; i < message_in_bytes.length; i += (STREAM_SIZE + 1)) {
+
+
                 int max = i + STREAM_SIZE;
 
                 if (i + STREAM_SIZE >= message_in_bytes.length) {
                     max = message_in_bytes.length - 1;
                 }
+
                 // add new Chunk to the list of chunks
                 chunks.add(new Chunk(cnt++, Arrays.copyOfRange(message_in_bytes, i, max + 1)));
+
             }
 
             // Using the Akka Streaming Module to build a Source Object out of the list of chunks
@@ -106,7 +111,6 @@ public class LargeMessageProxy extends AbstractLoggingActor {
             receiverProxy.tell(new Wrapper(this.stream_reference_resolver.toSerializationFormat(sourceRef), this.sender(), receiver), this.self());
         } catch (IOException e) {
             e.printStackTrace();
-            //this.log().error(e, e.getMessage());
         }
     }
 
@@ -136,7 +140,6 @@ public class LargeMessageProxy extends AbstractLoggingActor {
                     for (Chunk node : nodes) {
                         result = ArrayUtils.addAll(result, node.getByteArray());
                     }
-                    //this.log().info("Received Byte Array Length: " + result.length);
 
                     try (ByteArrayInputStream inputStream = new ByteArrayInputStream(result);
                          ObjectInputStream ois = new ObjectInputStream(inputStream);
@@ -145,13 +148,10 @@ public class LargeMessageProxy extends AbstractLoggingActor {
                         // deserialize
                         Kryo kryo = new Kryo();
                         message.getReceiver().tell(kryo.readClassAndObject(input), message.getSender());
-                        this.log().info("Message send");
                     } catch (IOException e) {
                         e.printStackTrace();
-                        //this.log().error("Stream Error {}", e.getMessage());
                     } catch (Exception e) {
                         e.printStackTrace();
-                        //this.log().error(e, e.getMessage());
                     }
                 });
     }
@@ -160,7 +160,7 @@ public class LargeMessageProxy extends AbstractLoggingActor {
     @NoArgsConstructor
     @AllArgsConstructor
     static class LargeMessage<T> implements Serializable {
-        private static final long serialVersionUID = 2940665245810221108L;
+        private static final long serialVersionUID = 8193997184620822218L;
         private T message;
         private ActorRef receiver;
     }
@@ -169,7 +169,7 @@ public class LargeMessageProxy extends AbstractLoggingActor {
     @NoArgsConstructor
     @AllArgsConstructor
     private static class Wrapper implements Serializable {
-        private static final long serialVersionUID = 5707807743872319842L;
+        private static final long serialVersionUID = -8180912932060922349L;
         private String sourceRef;
         private ActorRef sender;
         private ActorRef receiver;
@@ -179,7 +179,7 @@ public class LargeMessageProxy extends AbstractLoggingActor {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class Chunk implements Serializable, Comparable<Chunk> {
-        private static final long serialVersionUID = 4557807743872319842L;
+        private static final long serialVersionUID = -1172402643941689635L;
         private int key;
         private byte[] byteArray;
 
