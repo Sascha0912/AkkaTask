@@ -4,6 +4,8 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -28,6 +30,8 @@ public class DatasetDescriptor implements Serializable {
 	private String datasetName = "passwords";
 	private String datasetPath = "data" + File.separator;
 	private String datasetEnding = ".csv";
+
+	private String currentWorkingDir  = System.getProperty("user.dir") + File.separator;
 
 	private boolean fileHasHeader = true;
 	private Charset charset = StandardCharsets.UTF_8;
@@ -61,9 +65,11 @@ public class DatasetDescriptor implements Serializable {
 		this.readerSkipDifferingLines = commandMaster.readerSkipDifferingLines;
 	}
 
-	public CSVReader createCSVReader() throws IOException {
-		Path path = Paths.get(this.datasetPath + this.datasetName + this.datasetEnding);
-		
+	public CSVReader createCSVReader() throws IOException{
+
+		Path path = Paths.get("../"+this.datasetPath + this.datasetName + this.datasetEnding);
+		// Path path = Paths.get(new URI("/Users/saschaobst/Desktop/Akka/ddm-pc/data/passwords.csv"));
+		                                  ///Users/saschaobst/Desktop/Akka/ddm-pc/target/data/passwords.csv
 		CSVParser parser = new CSVParserBuilder()
 				.withSeparator(this.valueSeparator)
 				.withQuoteChar(this.valueQuote)
@@ -72,7 +78,12 @@ public class DatasetDescriptor implements Serializable {
 				.withIgnoreLeadingWhiteSpace(this.valueIgnoreLeadingWhitespace)
 				.withFieldAsNull(CSVReaderNullFieldIndicator.EMPTY_SEPARATORS)
 				.build();
-		
+
+
+		//Path path
+		//System.out.println("PATH: "+path.toString());
+		//System.out.println(this.charset);
+		//BufferedReader bufferTest = Files.newBufferedReader(path,this.charset);
 		BufferedReader buffer = Files.newBufferedReader(path, this.charset);
 		CSVReader reader = new CSVReaderBuilder(buffer).withCSVParser(parser).build();
 		

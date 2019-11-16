@@ -70,8 +70,15 @@ public class Worker extends AbstractLoggingActor {
 				.match(CurrentClusterState.class, this::handle)
 				.match(MemberUp.class, this::handle)
 				.match(MemberRemoved.class, this::handle)
+				.match(String.class, this::handle)
 				.matchAny(object -> this.log().info("Received unknown message: \"{}\"", object.toString()))
 				.build();
+	}
+
+	private void handle(String hint) {
+		//TODO: implement
+		System.out.println("ICH bin: "+this.self());
+		System.out.println("Received hint " + hint);
 	}
 
 	private void handle(CurrentClusterState message) {

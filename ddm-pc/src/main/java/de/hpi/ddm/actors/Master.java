@@ -13,6 +13,7 @@ import akka.actor.Terminated;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 
 public class Master extends AbstractLoggingActor {
 
@@ -100,15 +101,43 @@ public class Master extends AbstractLoggingActor {
 		// 2. If we process the batches early, we can achieve latency hiding. /////////////////////////////////
 		// TODO: Implement the processing of the data for the concrete assignment. ////////////////////////////
 		///////////////////////////////////////////////////////////////////////////////////////////////////////
-		
+
+		System.out.println("Das sind alle: "+this.workers);
+
+		//System.out.println(message.lines);
 		if (message.getLines().isEmpty()) {
 			this.collector.tell(new Collector.PrintMessage(), this.self());
 			this.terminate();
 			return;
 		}
+
+		//String password = "";
+		//List<String> hints = new ArrayList<>();
+
+
+		message.lines.forEach(lineAsArray -> {
+		int worker_id = 0;
+			System.out.println(lineAsArray[4]); //password
+			for (int hint_id = 5; hint_id < lineAsArray.length; hint_id++){
+				this.workers.get(worker_id++).tell(lineAsArray[hint_id],this.self());
+				if (worker_id == this.workers.size()) {
+					//if all workers have received a hint, get back to the first worker
+					worker_id = 0;
+				}
+			}
+			//password = i[3];
+		});
+
+		//message.lines.forEach((i) -> {
+		//	System.out.println(i);
+		//	int count = StringUtils.countMatches(i.toString(), ";") + 1;
+		//	System.out.println(count);
+			//String[] lineElements = new String[]
+			//lineElements = i.toString().split(";");
+		//});
 		
-		for (String[] line : message.getLines())
-			System.out.println(Arrays.toString(line));
+		//for (String[] line : message.getLines())
+			//System.out.println(Arrays.toString(line));
 		
 		this.collector.tell(new Collector.CollectMessage("Processed batch of size " + message.getLines().size()), this.self());
 		this.reader.tell(new Reader.ReadMessage(), this.self());
