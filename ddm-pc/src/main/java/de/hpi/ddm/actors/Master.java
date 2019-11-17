@@ -2,7 +2,6 @@ package de.hpi.ddm.actors;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import akka.actor.AbstractLoggingActor;
@@ -13,7 +12,6 @@ import akka.actor.Terminated;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.apache.commons.lang3.StringUtils;
 
 public class Master extends AbstractLoggingActor {
 
@@ -125,19 +123,7 @@ public class Master extends AbstractLoggingActor {
 					worker_id = 0;
 				}
 			}
-			//password = i[3];
 		});
-
-		//message.lines.forEach((i) -> {
-		//	System.out.println(i);
-		//	int count = StringUtils.countMatches(i.toString(), ";") + 1;
-		//	System.out.println(count);
-			//String[] lineElements = new String[]
-			//lineElements = i.toString().split(";");
-		//});
-		
-		//for (String[] line : message.getLines())
-			//System.out.println(Arrays.toString(line));
 		
 		this.collector.tell(new Collector.CollectMessage("Processed batch of size " + message.getLines().size()), this.self());
 		this.reader.tell(new Reader.ReadMessage(), this.self());

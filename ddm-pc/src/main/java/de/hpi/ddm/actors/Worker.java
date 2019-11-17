@@ -1,14 +1,12 @@
 package de.hpi.ddm.actors;
 
+import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.List;
+import java.util.*;
 
-import akka.actor.AbstractLoggingActor;
-import akka.actor.ActorRef;
-import akka.actor.PoisonPill;
-import akka.actor.Props;
+import akka.actor.*;
 import akka.cluster.Cluster;
 import akka.cluster.ClusterEvent.CurrentClusterState;
 import akka.cluster.ClusterEvent.MemberRemoved;
@@ -16,6 +14,10 @@ import akka.cluster.ClusterEvent.MemberUp;
 import akka.cluster.Member;
 import akka.cluster.MemberStatus;
 import de.hpi.ddm.MasterSystem;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import scala.Char;
 
 public class Worker extends AbstractLoggingActor {
 
@@ -24,6 +26,10 @@ public class Worker extends AbstractLoggingActor {
 	////////////////////////
 	
 	public static final String DEFAULT_NAME = "worker";
+
+	private static final char[] passwordCharsAsArray = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'};
+	public static final ArrayList<Char> PASSWORD_CHARS = new ArrayList(Arrays.asList(passwordCharsAsArray));
+	public static final int PASSWORD_LENGTH = 10;
 
 	public static Props props() {
 		return Props.create(Worker.class);
@@ -37,13 +43,25 @@ public class Worker extends AbstractLoggingActor {
 	// Actor Messages //
 	////////////////////
 
-	/////////////////
-	// Actor State //
-	/////////////////
+	@Data
+
+
+	public static class HintMessage implements Serializable {
+		private static final long serialVersionUID = 8343040942748609598L;
+		private String hint;
+		private char symbolNotInUniverse;
+		private ActorRef sender;
+
+		public HintMessage(String hint, char symbolNotInUniverse, ActorRef sender) {
+			this.hint = hint;
+			this.symbolNotInUniverse = symbolNotInUniverse;
+			this.sender = sender;
+		}
+	}
 
 	private Member masterSystem;
 	private final Cluster cluster;
-	
+
 	/////////////////////
 	// Actor Lifecycle //
 	/////////////////////
@@ -75,11 +93,48 @@ public class Worker extends AbstractLoggingActor {
 				.build();
 	}
 
-	private void handle(String hint) {
+	private static Set convertToSet(String string) {
+		Set resultSet = new HashSet();
+		for (int i = 0; i < string.length(); i++) {
+			resultSet.add(new Character(string.charAt(i)));
+		}
+
+		return resultSet;
+	}
+
+	
+
+	private void handle(HintMessage message) {
+		ActorRef sender = message.sender;
+		ActorSelection senderProxy = this.context().actorSelection(sender.path().child(DEFAULT_NAME));
+
+		String hint = message.hint;
 		//TODO: implement
+		boolean found = false;
+		while (!found) {
+			String candidate = "abcdef";
+			String hashedCandidate = this.hash(candidate);
+			//if found, reduce candidate universe
+			if (hashedCandidate.equals(hint)) {
+				found = true;
+				Set<Char> candidateAsSet = convertToSet(candidate);
+				Set<Char> passwordCharsAsSet = new HashSet<>(PASSWORD_CHARS);
+
+				passwordCharsAsSet.removeAll(candidateAsSet);
+
+				char symbolNotInPassword = (char) passwordCharsAsSet.toArray()[0];
+
+				HintMessage result = new HintMessage(hint, symbolNotInPassword, this.self());
+				senderProxy.tell(result, this.self());
+			}
+		}
+
+
 		System.out.println("ICH bin: "+this.self());
 		System.out.println("Received hint " + hint);
 	}
+
+	//TODO: handle dafür, dass das Password universum korrigiert wurde
 
 	private void handle(CurrentClusterState message) {
 		message.getMembers().forEach(member -> {
@@ -95,7 +150,7 @@ public class Worker extends AbstractLoggingActor {
 	private void register(Member member) {
 		if ((this.masterSystem == null) && member.hasRole(MasterSystem.MASTER_ROLE)) {
 			this.masterSystem = member;
-			
+
 			this.getContext()
 				.actorSelection(member.address() + "/user/" + Master.DEFAULT_NAME)
 				.tell(new Master.RegistrationMessage(), this.self());
@@ -149,4 +204,16 @@ public class Worker extends AbstractLoggingActor {
 			}
 		}
 	}
+
+
+
+	
+
+
+
+
+
+
+
+
 }
