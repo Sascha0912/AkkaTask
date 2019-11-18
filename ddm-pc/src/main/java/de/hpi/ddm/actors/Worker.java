@@ -15,10 +15,7 @@ import akka.cluster.Member;
 import akka.cluster.MemberStatus;
 import de.hpi.ddm.MasterSystem;
 import de.hpi.ddm.structures.Util;
-import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.NoArgsConstructor;
-import scala.Char;
 
 public class Worker extends AbstractLoggingActor {
 
@@ -101,31 +98,47 @@ public class Worker extends AbstractLoggingActor {
 		return resultSet;
 	}
 
-	
+
+	/*
+	 * TODO:
+	 * 1. Ranges für die Worker festelegen
+	 * 2. 1. Durchlauf implementieren
+	 * 3. n. Durchlauf implementieren
+	 *
+	*/
+
+	/*
+	private void handle(HintMessage message) {
+
+
+	}
+	*/
 
 	private void handle(HintMessage message) {
 		ActorRef sender = message.sender;
 		ActorSelection senderProxy = this.context().actorSelection(sender.path().child(DEFAULT_NAME));
 
-
-		System.out.println("Hallo "+this.self());
 		String hint = message.hint;
-		System.out.println("HINT: "+ hint);
+
 		//TODO: implement
 		boolean found = false;
 		String candidate;
 
+		//int x = 0;
+		//Map<Integer,Integer> map = new TreeMap<>();
+		//map.put(1,1);
+		// long time = System.currentTimeMillis();;
 		while (!found) {
-
 
 			// used new Character because else PASSWORD_CHARS toArray is Object
 			Character[] candidateAsArray = PASSWORD_CHARS.toArray(new Character[PASSWORD_CHARS.size()]);
 			candidate = (candidateAsArray).toString(); //first candidate, i.e. abcdefghijk
+
+
 			String hashedCandidate = this.hash(candidate);
 			//if found, reduce candidate universe
 			if (hashedCandidate.equals(hint)) {
 				found = true;
-				System.out.println("FOUND! "+this.self());
 				Set<Character> candidateAsSet = convertToSet(candidate);
 				Set<Character> passwordCharsAsSet = new HashSet<>(PASSWORD_CHARS);
 
@@ -134,18 +147,15 @@ public class Worker extends AbstractLoggingActor {
 				char symbolNotInPassword = (char) passwordCharsAsSet.toArray()[0];
 
 				HintMessage result = new HintMessage(hint, symbolNotInPassword, this.self());
-				System.out.println("HINT GELÖST: " + candidate + " SYMBOL NICHT IN PW: " + symbolNotInPassword);
 				senderProxy.tell(result, this.self());
 			} else {
-				System.out.println("GO findNextPermutation!");
+
+
 				Util.findNextPermutation(candidateAsArray);
+
 			}
 		}
 
-
-
-
-		//System.out.println("ICH bin: "+this.self());
 		System.out.println("Received hint " + hint);
 	}
 

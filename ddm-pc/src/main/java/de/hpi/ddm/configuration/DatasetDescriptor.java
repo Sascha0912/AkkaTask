@@ -67,7 +67,7 @@ public class DatasetDescriptor implements Serializable {
 
 	public CSVReader createCSVReader() throws IOException{
 
-		Path path = Paths.get("../"+this.datasetPath + this.datasetName + this.datasetEnding);
+		Path path = Paths.get(this.datasetPath + this.datasetName + this.datasetEnding);
 		// Path path = Paths.get(new URI("/Users/saschaobst/Desktop/Akka/ddm-pc/data/passwords.csv"));
 		                                  ///Users/saschaobst/Desktop/Akka/ddm-pc/target/data/passwords.csv
 		CSVParser parser = new CSVParserBuilder()
