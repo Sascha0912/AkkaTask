@@ -14,6 +14,7 @@ import akka.cluster.ClusterEvent.MemberUp;
 import akka.cluster.Member;
 import akka.cluster.MemberStatus;
 import de.hpi.ddm.MasterSystem;
+import de.hpi.ddm.structures.Util;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -27,8 +28,8 @@ public class Worker extends AbstractLoggingActor {
 	
 	public static final String DEFAULT_NAME = "worker";
 
-	private static final char[] passwordCharsAsArray = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'};
-	public static final ArrayList<Char> PASSWORD_CHARS = new ArrayList(Arrays.asList(passwordCharsAsArray));
+	private static final Character[] passwordCharsAsArray = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'};
+	public static final ArrayList<Character> PASSWORD_CHARS = new ArrayList(Arrays.asList(passwordCharsAsArray));
 	public static final int PASSWORD_LENGTH = 10;
 
 	public static Props props() {
@@ -44,10 +45,8 @@ public class Worker extends AbstractLoggingActor {
 	////////////////////
 
 	@Data
-
-
 	public static class HintMessage implements Serializable {
-		private static final long serialVersionUID = 8343040942748609598L;
+		private static final long serialVersionUID = 8343040842748609598L;
 		private String hint;
 		private char symbolNotInUniverse;
 		private ActorRef sender;
@@ -88,7 +87,7 @@ public class Worker extends AbstractLoggingActor {
 				.match(CurrentClusterState.class, this::handle)
 				.match(MemberUp.class, this::handle)
 				.match(MemberRemoved.class, this::handle)
-				.match(String.class, this::handle)
+				.match(HintMessage.class, this::handle)
 				.matchAny(object -> this.log().info("Received unknown message: \"{}\"", object.toString()))
 				.build();
 	}
@@ -108,29 +107,45 @@ public class Worker extends AbstractLoggingActor {
 		ActorRef sender = message.sender;
 		ActorSelection senderProxy = this.context().actorSelection(sender.path().child(DEFAULT_NAME));
 
+
+		System.out.println("Hallo "+this.self());
 		String hint = message.hint;
+		System.out.println("HINT: "+ hint);
 		//TODO: implement
 		boolean found = false;
+		String candidate;
+
 		while (!found) {
-			String candidate = "abcdef";
+
+
+			// used new Character because else PASSWORD_CHARS toArray is Object
+			Character[] candidateAsArray = PASSWORD_CHARS.toArray(new Character[PASSWORD_CHARS.size()]);
+			candidate = (candidateAsArray).toString(); //first candidate, i.e. abcdefghijk
 			String hashedCandidate = this.hash(candidate);
 			//if found, reduce candidate universe
 			if (hashedCandidate.equals(hint)) {
 				found = true;
-				Set<Char> candidateAsSet = convertToSet(candidate);
-				Set<Char> passwordCharsAsSet = new HashSet<>(PASSWORD_CHARS);
+				System.out.println("FOUND! "+this.self());
+				Set<Character> candidateAsSet = convertToSet(candidate);
+				Set<Character> passwordCharsAsSet = new HashSet<>(PASSWORD_CHARS);
 
 				passwordCharsAsSet.removeAll(candidateAsSet);
 
 				char symbolNotInPassword = (char) passwordCharsAsSet.toArray()[0];
 
 				HintMessage result = new HintMessage(hint, symbolNotInPassword, this.self());
+				System.out.println("HINT GELÖST: " + candidate + " SYMBOL NICHT IN PW: " + symbolNotInPassword);
 				senderProxy.tell(result, this.self());
+			} else {
+				System.out.println("GO findNextPermutation!");
+				Util.findNextPermutation(candidateAsArray);
 			}
 		}
 
 
-		System.out.println("ICH bin: "+this.self());
+
+
+		//System.out.println("ICH bin: "+this.self());
 		System.out.println("Received hint " + hint);
 	}
 

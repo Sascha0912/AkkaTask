@@ -34,7 +34,21 @@ public class Master extends AbstractLoggingActor {
 	////////////////////
 	// Actor Messages //
 	////////////////////
+	/*
+	@Data
+	public static class HintMessage implements Serializable {
+		private static final long serialVersionUID = 8343040942748609598L;
+		private String hint;
+		private char symbolNotInUniverse;
+		private ActorRef sender;
 
+		public HintMessage(String hint, char symbolNotInUniverse, ActorRef sender) {
+			this.hint = hint;
+			this.symbolNotInUniverse = symbolNotInUniverse;
+			this.sender = sender;
+		}
+	}
+	*/
 	@Data
 	public static class StartMessage implements Serializable {
 		private static final long serialVersionUID = -50374816448627600L;
@@ -100,7 +114,7 @@ public class Master extends AbstractLoggingActor {
 		// TODO: Implement the processing of the data for the concrete assignment. ////////////////////////////
 		///////////////////////////////////////////////////////////////////////////////////////////////////////
 
-		System.out.println("Das sind alle: "+this.workers);
+		//System.out.println("Das sind alle: "+this.workers);
 
 		//System.out.println(message.lines);
 		if (message.getLines().isEmpty()) {
@@ -117,7 +131,10 @@ public class Master extends AbstractLoggingActor {
 		int worker_id = 0;
 			System.out.println(lineAsArray[4]); //password
 			for (int hint_id = 5; hint_id < lineAsArray.length; hint_id++){
-				this.workers.get(worker_id++).tell(lineAsArray[hint_id],this.self());
+				// TODO: find better solution
+				Worker.HintMessage hi  = new Worker.HintMessage(lineAsArray[hint_id],' ',this.self());
+
+				this.workers.get(worker_id++).tell(hi,this.self());
 				if (worker_id == this.workers.size()) {
 					//if all workers have received a hint, get back to the first worker
 					worker_id = 0;
