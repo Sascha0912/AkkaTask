@@ -45,12 +45,12 @@ public class Worker extends AbstractLoggingActor {
 	public static class HintMessage implements Serializable {
 		private static final long serialVersionUID = 8343040842748609598L;
 		private String hint;
-		private char symbolNotInUniverse;
+		private Character symbolNotInUniverse;
 		private ActorRef sender;
 		private Character[] startPermutation;
 		private Character[] endPermutation;
 
-		public HintMessage(String hint, Character[] startPermutation, Character[] endPermutation, char symbolNotInUniverse, ActorRef sender) {
+		public HintMessage(String hint, Character[] startPermutation, Character[] endPermutation, Character symbolNotInUniverse, ActorRef sender) {
 			this.hint = hint;
 			this.symbolNotInUniverse = symbolNotInUniverse;
 			this.sender = sender;
@@ -126,38 +126,76 @@ public class Worker extends AbstractLoggingActor {
 
 		//TODO: implement
 		boolean found = false;
-		String candidate;
-
+		//tring candidate; //= Arrays.toString(message.startPermutation);
+		String[] candidates = new String[message.startPermutation.length];
+		String rawCandidate = "";
 		//int x = 0;
 		//Map<Integer,Integer> map = new TreeMap<>();
 		//map.put(1,1);
 		// long time = System.currentTimeMillis();;
-		while (!found) {
+		System.out.println("Worker " + this.self().path() +": " + Arrays.toString(message.startPermutation) + ", " + Arrays.toString(message.endPermutation) );
+		Character[] currentPermutation = message.startPermutation;
+		while (!found && (!Arrays.equals(currentPermutation, message.endPermutation))) {
 
 			// used new Character because else PASSWORD_CHARS toArray is Object
-			Character[] candidateAsArray = PASSWORD_CHARS.toArray(new Character[PASSWORD_CHARS.size()]);
-			candidate = (candidateAsArray).toString(); //first candidate, i.e. abcdefghijk
+			//Character[] candidateAsArray = PASSWORD_CHARS.toArray(new Character[PASSWORD_CHARS.size()]);
+			//candidate = (candidateAsArray).toString(); //first candidate, i.e. abcdefghijk
 
+			//System.out.println(Arrays.toString(currentPermutation));
 
+			//SUBKANDIDATEN MÜSSEN AUFGEBAUT WERDEN; wenn abcd, dann abc, cbd, abc und abd
+			// baue zuerst die Permutation auf, die verwendet wird für die Kandidatengenerierung
+			for (Character c: currentPermutation) {
+				rawCandidate += c;
+			}
+			// lösche aus dem Roh-Kandidaten jeden Charakter einmal und baue dadurch die Subkandidaten auf
+			for (int i=0; i < currentPermutation.length; i++) {
+				candidates[i] = rawCandidate.replace("" + currentPermutation[i], "");
+			}
+			for (int i = 0; i < candidates.length; i++) {
+				String candidate = candidates[i];
+				String hashedCandidate = this.hash(candidate);
+				if (hashedCandidate.equals(hint)) {
+					System.out.println("LÄSUNG GEFUNGEND");
+					found = true;
+					Set<Character> candidateAsSet = convertToSet(candidate);
+					Set<Character> passwordCharsAsSet = new HashSet<>(PASSWORD_CHARS);
+
+					passwordCharsAsSet.removeAll(candidateAsSet);
+
+					Character symbolNotInPassword = (Character) passwordCharsAsSet.toArray()[0];
+
+					HintMessage result = new HintMessage(hint, message.startPermutation, message.endPermutation, symbolNotInPassword, this.self());
+					senderProxy.tell(result, this.self());
+				}
+				if(i==candidate.length()) {
+					Util.findNextPermutation(currentPermutation);
+				}
+			}
+			/*
+			if (candidate.equals("HJKGDEFBIC")) { // A fehlt! wir bauen aber alle möglichen Permutationen!
+				System.out.println("Bei Lösung angekommen!");
+			}
+			//System.out.println("Worker " + this.self().path() + ": " + candidate + "  |  " + hint);
 			String hashedCandidate = this.hash(candidate);
+			//System.out.println(hashedCandidate);
 			//if found, reduce candidate universe
 			if (hashedCandidate.equals(hint)) {
+				System.out.println("LÄSUNG GEFUNGEND");
 				found = true;
 				Set<Character> candidateAsSet = convertToSet(candidate);
 				Set<Character> passwordCharsAsSet = new HashSet<>(PASSWORD_CHARS);
 
 				passwordCharsAsSet.removeAll(candidateAsSet);
 
-				char symbolNotInPassword = (char) passwordCharsAsSet.toArray()[0];
+				Character symbolNotInPassword = (Character) passwordCharsAsSet.toArray()[0];
 
-				HintMessage result = new HintMessage(hint, symbolNotInPassword, this.self());
+				HintMessage result = new HintMessage(hint, message.startPermutation, message.endPermutation, symbolNotInPassword, this.self());
 				senderProxy.tell(result, this.self());
 			} else {
-
-
-				Util.findNextPermutation(candidateAsArray);
-
+				Util.findNextPermutation(currentPermutation);
 			}
+			*/
 		}
 
 		System.out.println("Received hint " + hint);

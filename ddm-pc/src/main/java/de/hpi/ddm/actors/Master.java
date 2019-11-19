@@ -113,8 +113,9 @@ public class Master extends AbstractLoggingActor {
 
 		List<Character[]> startPermutations = new ArrayList<>();
 		List<Character[]> endPermutations = new ArrayList<>();
-		Map<ActorPath,Character[][]> startEnd = new HashMap<>();
+		Map<Integer,Character[][]> startEnd = new HashMap<>();
 
+		// TODO: generisch machen
 		Character[] curPermutation = {'A','B','C','D','E','F','G','H','I','J','K'};
 
 		if (message.getLines().isEmpty()) {
@@ -122,6 +123,8 @@ public class Master extends AbstractLoggingActor {
 			this.terminate();
 			return;
 		}
+
+
 
 
 			// Worker.HintMessage msg = new Worker.HintMessage(lineAsArray[5],' ',this.self());
@@ -170,29 +173,41 @@ public class Master extends AbstractLoggingActor {
 
 			int workerId = 0;
 			Character[][] permutationRange = new Character[2][alphabetSize-1];
-			System.out.println(startIndices);
-			System.out.println(endIndices);
-			System.out.println(amountPermutations);
+			//System.out.println(startIndices);
+			//System.out.println(endIndices);
+			//System.out.println(amountPermutations);
 			for (int i=0; i<amountPermutations;i++){
 				Util.findNextPermutation(curPermutation);
 				//System.out.println(Arrays.toString(curPermutation));
 				if (startIndices.contains(i)){
 					//System.out.println("Start: "+Arrays.toString(curPermutation));
-					permutationRange[0] = curPermutation;
+					permutationRange[0] = Arrays.copyOf(curPermutation, curPermutation.length);
 					//startPermutations.add(curPermutation);
 				}
 				if (endIndices.contains(i)){
 					//System.out.println(Arrays.toString(curPermutation));
-					permutationRange[1] = curPermutation;
-					startEnd.put(this.workers.get(workerId).path(), permutationRange);
+					permutationRange[1] = Arrays.copyOf(curPermutation, curPermutation.length);
+					//System.out.println("WorkerPath: "+this.workers.get(workerId).path());
+					//System.out.println("PUTTING TO " + workerId + ": " + Arrays.toString(permutationRange[0]) + " and " + Arrays.toString(permutationRange[1]));
+					startEnd.put(workerId, Arrays.copyOf(permutationRange, permutationRange.length));
 					// this only works for the first row (get 0) and first hint (column 5)
-					this.workers.get(i).tell(new Worker.HintMessage(message.lines.get(0)[5]));
+
 					workerId++;
 					//endPermutations.add(curPermutation);
 				}
 
 			}
-			System.out.println("DICTIONARY WITH PERMUTATION RANGE: " + convertWithIteration(startEnd));
+
+
+
+			for (int i=0; i < this.workers.size(); i++){
+
+				this.workers.get(i).tell(new Worker.HintMessage(message.lines.get(0)[5],
+						startEnd.get(i)[0],startEnd.get(i)[1],null,this.self()),this.self());
+			}
+
+			// TODO: this.workers.get(i).tell(new Worker.HintMessage(message.lines.get(0)[5])); ----- tell den workers welche ranges sie bekommen
+			//System.out.println("DICTIONARY WITH PERMUTATION RANGE: " + convertWithIteration(startEnd));
 			//startEnd.put(this.workers.get(i).path(), )
 			//System.out.println("StartPermutations: "+startPermutations);
 
