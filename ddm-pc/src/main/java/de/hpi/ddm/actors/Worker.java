@@ -47,11 +47,15 @@ public class Worker extends AbstractLoggingActor {
 		private String hint;
 		private char symbolNotInUniverse;
 		private ActorRef sender;
+		private Character[] startPermutation;
+		private Character[] endPermutation;
 
-		public HintMessage(String hint, char symbolNotInUniverse, ActorRef sender) {
+		public HintMessage(String hint, Character[] startPermutation, Character[] endPermutation, char symbolNotInUniverse, ActorRef sender) {
 			this.hint = hint;
 			this.symbolNotInUniverse = symbolNotInUniverse;
 			this.sender = sender;
+			this.startPermutation = startPermutation;
+			this.endPermutation = endPermutation;
 		}
 	}
 

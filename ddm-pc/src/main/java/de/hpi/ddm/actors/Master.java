@@ -1,16 +1,9 @@
 package de.hpi.ddm.actors;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import akka.actor.AbstractLoggingActor;
-import akka.actor.ActorRef;
-import akka.actor.PoisonPill;
-import akka.actor.Props;
-import akka.actor.Terminated;
+import akka.actor.*;
 import de.hpi.ddm.structures.Util;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -120,8 +113,7 @@ public class Master extends AbstractLoggingActor {
 
 		List<Character[]> startPermutations = new ArrayList<>();
 		List<Character[]> endPermutations = new ArrayList<>();
-
-		//Map<String,Integer[]> startEnd = new HashMap();
+		Map<ActorPath,Character[][]> startEnd = new HashMap<>();
 
 		Character[] curPermutation = {'A','B','C','D','E','F','G','H','I','J','K'};
 
@@ -134,7 +126,7 @@ public class Master extends AbstractLoggingActor {
 
 			// Worker.HintMessage msg = new Worker.HintMessage(lineAsArray[5],' ',this.self());
 			String alphabet = message.lines.get(0)[2];
-			int alphabetSize = 3; //alphabet.length();
+			int alphabetSize = alphabet.length(); //
 			//System.out.println("AlphabetSize: "+ alphabetSize);
 
 			int amountPermutations = f(alphabetSize);
@@ -170,27 +162,69 @@ public class Master extends AbstractLoggingActor {
 				startIndices.add(start);
 				endIndices.add(end);
 
-				Integer[][] startPlusEnd = {{start},{end}};
+
+				//Integer[][] startPlusEnd = {{start},{end}};
 				//startEnd.put("workerID)
 
 			}
 
+			int workerId = 0;
+			Character[][] permutationRange = new Character[2][alphabetSize-1];
+			System.out.println(startIndices);
+			System.out.println(endIndices);
+			System.out.println(amountPermutations);
 			for (int i=0; i<amountPermutations;i++){
 				Util.findNextPermutation(curPermutation);
+				//System.out.println(Arrays.toString(curPermutation));
 				if (startIndices.contains(i)){
-					startPermutations.add(curPermutation);
+					//System.out.println("Start: "+Arrays.toString(curPermutation));
+					permutationRange[0] = curPermutation;
+					//startPermutations.add(curPermutation);
 				}
 				if (endIndices.contains(i)){
-					endPermutations.add(curPermutation);
+					//System.out.println(Arrays.toString(curPermutation));
+					permutationRange[1] = curPermutation;
+					startEnd.put(this.workers.get(workerId).path(), permutationRange);
+					// this only works for the first row (get 0) and first hint (column 5)
+					this.workers.get(i).tell(new Worker.HintMessage(message.lines.get(0)[5]));
+					workerId++;
+					//endPermutations.add(curPermutation);
 				}
+
 			}
-			System.out.println("StartPermutations: "+startPermutations);
-			System.out.println("EndPermutations: "+endPermutations);
+			System.out.println("DICTIONARY WITH PERMUTATION RANGE: " + convertWithIteration(startEnd));
+			//startEnd.put(this.workers.get(i).path(), )
+			//System.out.println("StartPermutations: "+startPermutations);
+
+			// System.out.println(startPermutations.get(0)[0]);
+			//System.out.println("EndPermutations: "+endPermutations);
 
 
 
 
 
+	}
+	public String convertWithIteration(Map<ActorPath, Character[][]> map) {
+		String mapAsString = "";
+		String values = "";
+		Character[] firstPermutation;
+		Character[] secondPermutation;
+		for (ActorPath key : map.keySet()) {
+			firstPermutation = map.get(key)[0];
+			secondPermutation = map.get(key)[1];
+			values = Arrays.toString(firstPermutation) + " | " + Arrays.toString(secondPermutation);
+			for (int i=0; i<firstPermutation.length; i++){
+				System.out.print(firstPermutation[i]+" ");
+			}
+			System.out.println();
+			for (int j=0; j<secondPermutation.length; j++){
+				System.out.print(secondPermutation[j]+" ");
+			}
+			System.out.println();
+
+			mapAsString += (key + ": " + values);
+		}
+		return mapAsString;
 	}
 
 
