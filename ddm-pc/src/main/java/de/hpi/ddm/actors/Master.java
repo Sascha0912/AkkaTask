@@ -2,6 +2,8 @@ package de.hpi.ddm.actors;
 
 import java.io.Serializable;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import akka.actor.*;
 import de.hpi.ddm.structures.Util;
@@ -16,6 +18,17 @@ public class Master extends AbstractLoggingActor {
 	////////////////////////
 	
 	public static final String DEFAULT_NAME = "master";
+
+	public static final Character[] passwordCharsAsArray = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'};
+	public static final ArrayList<Character> PASSWORD_CHARS = new ArrayList(Arrays.asList(passwordCharsAsArray));
+	public static final Integer PASSWORD_LENGTH = 10;
+
+	private List<String[]> passwordFile = new ArrayList<>();
+	private Integer currentLineInList = 0;
+	private Integer currentColumnInList = 5;
+	private String hintReceived = "";
+
+	Map<Integer, List<Map<Character,Character[][]>>> mainMap = new HashMap<>();
 
 	public static Props props(final ActorRef reader, final ActorRef collector) {
 		return Props.create(Master.class, () -> new Master(reader, collector));
@@ -91,6 +104,7 @@ public class Master extends AbstractLoggingActor {
 				.match(BatchMessage.class, this::handle)
 				.match(Terminated.class, this::handle)
 				.match(RegistrationMessage.class, this::handle)
+				.match(Worker.HintMessage.class, this::handle)
 				.matchAny(object -> this.log().info("Received unknown message: \"{}\"", object.toString()))
 				.build();
 	}
@@ -106,17 +120,67 @@ public class Master extends AbstractLoggingActor {
 		return n == 0 ? 1 : n * f( n - 1 );
 	}
 
+	protected void handle(Worker.HintMessage message) {
+		// a worker has successfully cracked a hint -> TODO: log it
+
+		this.log().info(message.hint + " cracked and sent back to master");
+		if (hintReceived.equals("") || !hintReceived.equals(message.hint)) {
+			hintReceived=message.hint;
+			currentColumnInList++;
+			//System.out.println("Column inc: "+currentColumnInList);
+		}
+		// System.out.println("MSG: "+message);
+		// HintMessage back to master -> jump to next line
+		if (passwordFile.get(0).length==currentColumnInList) {
+			currentColumnInList = 5;
+			currentLineInList++;
+		}
+		if (passwordFile.size()-1==currentLineInList){
+			System.out.println("finish");
+		}
+
+		Integer i = 0;
+		ActorRef worker = message.sender;
+		Pattern p = Pattern.compile("[0-9]+$");
+		Matcher m = p.matcher(worker.path().toString());
+		if(m.find()) {
+			i = Integer.parseInt(m.group());
+
+		}
+		// System.out.println("Sending new message to worker " + i);
+		Worker.HintMessage msg = new Worker.HintMessage(this.passwordFile.get(currentLineInList)[currentColumnInList],mainMap.get(i),null,this.self());
+		worker.tell(msg,this.self());
+
+		// stop all the other workers - no need to work at the current hint anymore
+	}
+
 	protected void handle(BatchMessage message) {
+
+		///////////////////////////////////////////////////////////////////////////////////////////////////////
+		// The input file is read in batches for two reasons: /////////////////////////////////////////////////
+		// 1. If we distribute the batches early, we might not need to hold the entire input data in memory. //
+		// 2. If we process the batches early, we can achieve latency hiding. /////////////////////////////////
+		// TODO: Implement the processing of the data for the concrete assignment. ////////////////////////////
+		///////////////////////////////////////////////////////////////////////////////////////////////////////
+
+		if (passwordFile.isEmpty()){
+			passwordFile = new ArrayList<>(message.lines);
+		}
 
 		List<Integer> startIndices = new ArrayList<>();
 		List<Integer> endIndices = new ArrayList<>();
 
 		List<Character[]> startPermutations = new ArrayList<>();
 		List<Character[]> endPermutations = new ArrayList<>();
-		Map<Integer,Character[][]> startEnd = new HashMap<>();
+
+
+		for (int i = 0; i < this.workers.size(); i++) {
+			mainMap.put(i, new ArrayList<>());
+		}
 
 		// TODO: generisch machen
 		Character[] curPermutation = {'A','B','C','D','E','F','G','H','I','J','K'};
+		Character[] subPermutation;
 
 		if (message.getLines().isEmpty()) {
 			this.collector.tell(new Collector.PrintMessage(), this.self());
@@ -125,100 +189,96 @@ public class Master extends AbstractLoggingActor {
 		}
 
 
+		String alphabet = message.lines.get(currentLineInList)[2];
+		int alphabetSize = alphabet.length();
 
+		int amountPermutations = f(alphabetSize - 1); // um eins reduziert, da subkandidaten betrachtet werden
 
-			// Worker.HintMessage msg = new Worker.HintMessage(lineAsArray[5],' ',this.self());
-			String alphabet = message.lines.get(0)[2];
-			int alphabetSize = alphabet.length(); //
-			//System.out.println("AlphabetSize: "+ alphabetSize);
+		double amountPerWorker = amountPermutations * 1.0 / this.workers.size();
 
-			int amountPermutations = f(alphabetSize);
-			//System.out.println("AmountPermutations: "+amountPermutations);
-			double amountPerWorker = amountPermutations * 1.0 / this.workers.size();
-			//System.out.println("AmountPerWorker: "+amountPerWorker);
-			int intPart = (int) amountPerWorker;
-			//System.out.println("IntPart: "+intPart);
-			double decimalDigits = amountPerWorker-intPart;
-			//System.out.println("DecimalDigits: "+decimalDigits);
-			// extraPermutations is always < this.workers.size() (amount of workers)
-			// distribute extraPermutations to workers !!!
-			int extraPermutations = (int) Math.ceil(decimalDigits * this.workers.size());
-			//System.out.println("ExtraPermutations: "+extraPermutations);
+		int intPart = (int) amountPerWorker;
 
-			int pointer = 0;
+		double decimalDigits = amountPerWorker - intPart;
+		// extraPermutations is always < this.workers.size() (amount of workers)
+		// distribute extraPermutations to workers !!!
+		int extraPermutations = (int) Math.ceil(decimalDigits * this.workers.size());
 
-			// Character[] chars = alphabet
+		int pointer = 0;
 
-			for (int i=0; i < this.workers.size(); i++){
-				int amountToCalculate = (int) amountPerWorker;
-				if (extraPermutations>0){
-					amountToCalculate++;
-					extraPermutations--;
-				}
-
-				int start = pointer;
-				int end = pointer + amountToCalculate-1;
-				pointer = pointer + amountToCalculate;
-				//System.out.println("Start: "+start);
-				//System.out.println("End: "+ end);
-
-				startIndices.add(start);
-				endIndices.add(end);
-
-
-				//Integer[][] startPlusEnd = {{start},{end}};
-				//startEnd.put("workerID)
-
+		for (int i = 0; i < this.workers.size(); i++) {
+			int amountToCalculate = (int) amountPerWorker;
+			if (extraPermutations > 0) {
+				amountToCalculate++;
+				extraPermutations--;
 			}
 
-			int workerId = 0;
-			Character[][] permutationRange = new Character[2][alphabetSize-1];
-			//System.out.println(startIndices);
-			//System.out.println(endIndices);
-			//System.out.println(amountPermutations);
-			for (int i=0; i<amountPermutations;i++){
-				Util.findNextPermutation(curPermutation);
-				//System.out.println(Arrays.toString(curPermutation));
-				if (startIndices.contains(i)){
-					//System.out.println("Start: "+Arrays.toString(curPermutation));
-					permutationRange[0] = Arrays.copyOf(curPermutation, curPermutation.length);
-					//startPermutations.add(curPermutation);
-				}
-				if (endIndices.contains(i)){
-					//System.out.println(Arrays.toString(curPermutation));
-					permutationRange[1] = Arrays.copyOf(curPermutation, curPermutation.length);
-					//System.out.println("WorkerPath: "+this.workers.get(workerId).path());
-					//System.out.println("PUTTING TO " + workerId + ": " + Arrays.toString(permutationRange[0]) + " and " + Arrays.toString(permutationRange[1]));
-					startEnd.put(workerId, Arrays.copyOf(permutationRange, permutationRange.length));
-					// this only works for the first row (get 0) and first hint (column 5)
+			int start = pointer;
 
+			int end = pointer + amountToCalculate - 1;
+			pointer = pointer + amountToCalculate;
+
+			startIndices.add(start);
+			endIndices.add(end);
+		}
+
+		int workerId = 0;
+		Character[][] permutationRange = new Character[2][alphabetSize - 1]; //TODO: stimmt -1?
+
+		// {A, B, C, D, E, F, G, H, I, J, K}
+		for (Character key : curPermutation) {
+			subPermutation = Arrays.stream(curPermutation).filter(value -> value != key).toArray(Character[]::new);
+			// System.out.println("SubPermutation: " + Arrays.toString(subPermutation));
+
+			for (int i = 0; i < amountPermutations; i++) {
+				Util.findNextPermutation(subPermutation);
+
+				if (startIndices.contains(i)) {
+
+					permutationRange[0] = Arrays.copyOf(subPermutation, subPermutation.length);
+				}
+				if (endIndices.contains(i)) {
+
+					permutationRange[1] = Arrays.copyOf(subPermutation, subPermutation.length);
+					//System.out.println("permutationRange: "+Arrays.toString(permutationRange));
+					Character[][] copyPermutationRange = Arrays.copyOf(permutationRange, permutationRange.length);
+					//System.out.println(Arrays.toString(copyPermutationRange));
+					// Bsp: In Map<A,_> finden sich die Start- und Endpermutationen OHNE den char A
+					Map<Character, Character[][]> innerMap = new HashMap<>();
+
+					//wenn zugriff nicht null ist hol dir die werte, speichere die in der liste, füge der liste den neuen
+					//wert hinzu und speichere die vereinigung in der map ab
+
+					innerMap.put(key, copyPermutationRange);
+
+					List<Map<Character, Character[][]>> innerMaps;
+					innerMaps = mainMap.get(workerId);
+					innerMaps.add(innerMap);
+
+					mainMap.put(workerId, innerMaps);
+					// this only works for the first row (get 0) and first hint (column 5)
 					workerId++;
 					//endPermutations.add(curPermutation);
 				}
-
 			}
+			workerId = 0;
+		}
 
+		System.out.println("MainMap: "+mainMap.toString());
 
+		for (int i = 0; i < this.workers.size(); i++) {
+			for (Character c : curPermutation) {
 
-			for (int i=0; i < this.workers.size(); i++){
-
-				this.workers.get(i).tell(new Worker.HintMessage(message.lines.get(0)[5],
-						startEnd.get(i)[0],startEnd.get(i)[1],null,this.self()),this.self());
+				this.workers.get(i).tell(
+						new Worker.HintMessage(
+								message.lines.get(currentLineInList)[currentColumnInList],
+								mainMap.get(i),
+								null,
+								this.self()),
+						this.self());
 			}
-
-			// TODO: this.workers.get(i).tell(new Worker.HintMessage(message.lines.get(0)[5])); ----- tell den workers welche ranges sie bekommen
-			//System.out.println("DICTIONARY WITH PERMUTATION RANGE: " + convertWithIteration(startEnd));
-			//startEnd.put(this.workers.get(i).path(), )
-			//System.out.println("StartPermutations: "+startPermutations);
-
-			// System.out.println(startPermutations.get(0)[0]);
-			//System.out.println("EndPermutations: "+endPermutations);
-
-
-
-
-
+		}
 	}
+	/*
 	public String convertWithIteration(Map<ActorPath, Character[][]> map) {
 		String mapAsString = "";
 		String values = "";
@@ -241,51 +301,7 @@ public class Master extends AbstractLoggingActor {
 		}
 		return mapAsString;
 	}
-
-
-
-
-	/*
-
-	protected void handle(BatchMessage message) {
-		
-		///////////////////////////////////////////////////////////////////////////////////////////////////////
-		// The input file is read in batches for two reasons: /////////////////////////////////////////////////
-		// 1. If we distribute the batches early, we might not need to hold the entire input data in memory. //
-		// 2. If we process the batches early, we can achieve latency hiding. /////////////////////////////////
-		// TODO: Implement the processing of the data for the concrete assignment. ////////////////////////////
-		///////////////////////////////////////////////////////////////////////////////////////////////////////
-
-		//System.out.println("Das sind alle: "+this.workers);
-
-		//System.out.println(message.lines);
-		if (message.getLines().isEmpty()) {
-			this.collector.tell(new Collector.PrintMessage(), this.self());
-			this.terminate();
-			return;
-		}
-
-		message.lines.forEach(lineAsArray -> {
-			int worker_id = 0;
-			//System.out.println(lineAsArray[4]); //password
-			for (int hint_id = 5; hint_id < lineAsArray.length; hint_id++){
-				// TODO: find better solution
-				Worker.HintMessage hi  = new Worker.HintMessage(lineAsArray[hint_id],' ',this.self());
-
-				this.workers.get(worker_id++).tell(hi,this.self());
-				if (worker_id == this.workers.size()) {
-					//if all workers have received a hint, get back to the first worker
-					worker_id = 0;
-				}
-			}
-		});
-		
-		this.collector.tell(new Collector.CollectMessage("Processed batch of size " + message.getLines().size()), this.self());
-		this.reader.tell(new Reader.ReadMessage(), this.self());
-	}
 	*/
-
-
 	protected void terminate() {
 		this.reader.tell(PoisonPill.getInstance(), ActorRef.noSender());
 		this.collector.tell(PoisonPill.getInstance(), ActorRef.noSender());
