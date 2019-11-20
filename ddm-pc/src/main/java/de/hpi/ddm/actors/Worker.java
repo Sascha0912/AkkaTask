@@ -24,11 +24,15 @@ public class Worker extends AbstractLoggingActor {
 	////////////////////////
 	
 	public static final String DEFAULT_NAME = "worker";
+	public static boolean otherWorkerFoundSolution = false;
+	public static int counterMessages = 0; //Hilfsvariable
 
 	// Get all the constants from the Master
 	private static final Character[] passwordCharsAsArray = Master.passwordCharsAsArray;
 	public static final ArrayList<Character> PASSWORD_CHARS = Master.PASSWORD_CHARS;
 	public static final Integer PASSWORD_LENGTH = Master.PASSWORD_LENGTH;
+
+	private TreeMap<String, String> cache = new TreeMap<>();
 
 	public static Props props() {
 		return Props.create(Worker.class);
@@ -48,7 +52,7 @@ public class Worker extends AbstractLoggingActor {
 		public String hint;
 		private Character symbolNotInUniverse;
 		public ActorRef sender;
-		private List<Map<Character, Character[][]>> permutationRanges;
+		public List<Map<Character, Character[][]>> permutationRanges;
 
 		public HintMessage(String hint,
 						   List<Map<Character, Character[][]>> permutationRanges,
@@ -96,47 +100,70 @@ public class Worker extends AbstractLoggingActor {
 	}
 
 	private void handle(HintMessage message) {
+		//otherWorkerFoundSolution = false;
 		//System.out.println("MSG: " + message);
-		ActorRef sender = message.sender;
-		ActorSelection senderProxy = this.context().actorSelection(sender.path().child(DEFAULT_NAME));
 
 		String hint = message.hint;
-
+		System.out.println("Worker " + this.self().path() + ": Received HintMessage with hint " + message.hint);
 		boolean found = false;
 		for (Map<Character, Character[][]> permutations : message.permutationRanges) {
+
 			Character key = (Character) permutations.keySet().toArray()[0]; //the symbol of the permutation range
+			//System.out.println("key: "+key);
 			Character[] startPermutation = permutations.get(key)[0];
 			Character[] endPermutation = permutations.get(key)[1];
 
+			System.out.println("WORKER " + this.self().path() + ": StartPermutation " + Arrays.toString(startPermutation));
 			Character[] currentPermutation = startPermutation;
 
+			/*
+			TODO: momentan läuft nach der ersten Hint nurnoch Worker 1 und berechnet Kombinationen!
+			--> Worker neu starten?
+			 */
+			//System.out.println("WORKER " + this.self().path() + ": CURRENT PERMUTATION: " + Arrays.toString(currentPermutation));
 			while (!found && (!Arrays.equals(currentPermutation, endPermutation))) {
-
+				if (otherWorkerFoundSolution) {
+					//System.out.println("I won't work on this no more");
+					break;
+				}
 				for (int i = 0; i < currentPermutation.length; i++) {
 					String candidate = "";
 					for (int j = 0; j < currentPermutation.length; j++) {
 						candidate += currentPermutation[j];
 					}
-
+					//String hashedCandidate;
+					/*
+					if (this.cache.containsKey(candidate)) {
+						hashedCandidate = this.cache.get(candidate);
+					} else {
+						hashedCandidate = this.hash(candidate);
+						this.cache.put(candidate, hashedCandidate);
+					}
+					*/
+					//if (counterMessages == 1) { //Debugging
+					//	System.out.println("WORKER " + this.self().path() + ": " + candidate);
+					//}
 					String hashedCandidate = this.hash(candidate);
 					if (hashedCandidate.equals(hint)) {
 						found = true;
+						otherWorkerFoundSolution = true; //TODO: in eine variable speichern
 						//System.out.println("WORKER " + this.self().path() + ": HINT CRACKED: " + key + " CANDIDATE: " + candidate);
 
 						HintMessage result = new HintMessage(hint, null, key, this.self());
 						message.sender.tell(result, this.self());
 						break;
 					} else {
+						//System.out.println("Current: "+Arrays.toString(currentPermutation));
 						Util.findNextPermutation(currentPermutation);
 					}
 				}
 			}
-			if (found) {
+			if (found || otherWorkerFoundSolution) {
 				//gehe nicht mehr durch die anderen character
 				break;
 			}
-			// System.out.println("Received hint " + hint);
 		}
+		System.out.println("WORKER " + self().path() + ": finished with task!");
 	}
 
 	//TODO: handle dafür, dass das Password universum korrigiert wurde

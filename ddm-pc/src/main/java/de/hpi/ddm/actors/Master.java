@@ -122,8 +122,7 @@ public class Master extends AbstractLoggingActor {
 
 	protected void handle(Worker.HintMessage message) {
 		// a worker has successfully cracked a hint -> TODO: log it
-
-		this.log().info(message.hint + " cracked and sent back to master");
+		this.log().info("Worker " + message.sender.path() + ": " + message.hint + " cracked and sent back to master");
 		if (hintReceived.equals("") || !hintReceived.equals(message.hint)) {
 			hintReceived=message.hint;
 			currentColumnInList++;
@@ -139,17 +138,31 @@ public class Master extends AbstractLoggingActor {
 			System.out.println("finish");
 		}
 
-		Integer i = 0;
 		ActorRef worker = message.sender;
+		try {
+			Thread.sleep(100);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		Worker.otherWorkerFoundSolution = false;
+		Worker.counterMessages++; // Hilfsvariable für Debugging
+
+		/*
+		Integer i = 0;
 		Pattern p = Pattern.compile("[0-9]+$");
 		Matcher m = p.matcher(worker.path().toString());
 		if(m.find()) {
 			i = Integer.parseInt(m.group());
 
 		}
+		*/
 		// System.out.println("Sending new message to worker " + i);
-		Worker.HintMessage msg = new Worker.HintMessage(this.passwordFile.get(currentLineInList)[currentColumnInList],mainMap.get(i),null,this.self());
-		worker.tell(msg,this.self());
+		for (int i = 0; i < this.workers.size(); i++) {
+			Worker.HintMessage msg = new Worker.HintMessage(this.passwordFile.get(currentLineInList)[currentColumnInList],
+					this.mainMap.get(i),null, this.self());
+			this.workers.get(i).tell(msg,this.self());
+		}
+
 
 		// stop all the other workers - no need to work at the current hint anymore
 	}
@@ -264,18 +277,14 @@ public class Master extends AbstractLoggingActor {
 		}
 
 		System.out.println("MainMap: "+mainMap.toString());
-
 		for (int i = 0; i < this.workers.size(); i++) {
-			for (Character c : curPermutation) {
-
-				this.workers.get(i).tell(
-						new Worker.HintMessage(
-								message.lines.get(currentLineInList)[currentColumnInList],
-								mainMap.get(i),
-								null,
-								this.self()),
-						this.self());
-			}
+			this.workers.get(i).tell(
+					new Worker.HintMessage(
+							message.lines.get(currentLineInList)[currentColumnInList],
+							mainMap.get(i),
+							null,
+							this.self()),
+					this.self());
 		}
 	}
 	/*
