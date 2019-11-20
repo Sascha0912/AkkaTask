@@ -1,9 +1,10 @@
 package de.hpi.ddm.actors;
 
 import java.io.Serializable;
+import java.io.UnsupportedEncodingException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import akka.actor.*;
 import de.hpi.ddm.structures.Util;
@@ -20,13 +21,14 @@ public class Master extends AbstractLoggingActor {
 	public static final String DEFAULT_NAME = "master";
 
 	public static final Character[] passwordCharsAsArray = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'};
-	public static final ArrayList<Character> PASSWORD_CHARS = new ArrayList(Arrays.asList(passwordCharsAsArray));
+	public static ArrayList<Character> passwordChars = null;
 	public static final Integer PASSWORD_LENGTH = 10;
 
 	private List<String[]> passwordFile = new ArrayList<>();
 	private Integer currentLineInList = 0;
 	private Integer currentColumnInList = 5;
 	private String hintReceived = "";
+	private List<String> combinationsOfPasswords = new ArrayList<>();
 
 	Map<Integer, List<Map<Character,Character[][]>>> mainMap = new HashMap<>();
 
@@ -126,13 +128,21 @@ public class Master extends AbstractLoggingActor {
 		if (hintReceived.equals("") || !hintReceived.equals(message.hint)) {
 			hintReceived=message.hint;
 			currentColumnInList++;
+			this.passwordChars.remove(message.symbolNotInUniverse);
 			//System.out.println("Column inc: "+currentColumnInList);
 		}
 		// System.out.println("MSG: "+message);
 		// HintMessage back to master -> jump to next line
 		if (passwordFile.get(0).length==currentColumnInList) {
+			//TODO: brute force pw
+
+			//System.out.println("PASSWORD UNIVERSE AFTER HINT-CRACKING: " + Arrays.toString(this.passwordChars.toArray()));
+			String password = this.bruteForce(this.passwordFile.get(currentLineInList)[2],
+												Integer.parseInt(this.passwordFile.get(currentLineInList)[3]));
+			System.out.println("MASTER FOUND PASSWORD: "+ password);
 			currentColumnInList = 5;
 			currentLineInList++;
+			this.passwordChars = new ArrayList(Arrays.asList(passwordCharsAsArray));
 		}
 		if (passwordFile.size()-1==currentLineInList){
 			System.out.println("finish");
@@ -175,7 +185,7 @@ public class Master extends AbstractLoggingActor {
 		// 2. If we process the batches early, we can achieve latency hiding. /////////////////////////////////
 		// TODO: Implement the processing of the data for the concrete assignment. ////////////////////////////
 		///////////////////////////////////////////////////////////////////////////////////////////////////////
-
+		this.passwordChars = new ArrayList(Arrays.asList(passwordCharsAsArray));
 		if (passwordFile.isEmpty()){
 			passwordFile = new ArrayList<>(message.lines);
 		}
@@ -280,7 +290,7 @@ public class Master extends AbstractLoggingActor {
 		for (int i = 0; i < this.workers.size(); i++) {
 			this.workers.get(i).tell(
 					new Worker.HintMessage(
-							message.lines.get(currentLineInList)[++currentColumnInList],
+							message.lines.get(currentLineInList)[currentColumnInList],
 							mainMap.get(i),
 							null,
 							this.self()),
@@ -337,4 +347,77 @@ public class Master extends AbstractLoggingActor {
 		this.workers.remove(message.getActor());
  	this.log().info("Unregistered {}", message.getActor());
 	}
+
+	private String bruteForce(String hashedPassword, int length) {
+		String solution = "";
+		this.combinations(this.passwordChars, length);
+		for (String candidate: this.combinationsOfPasswords) {
+			System.out.println(candidate);
+			String hashedCandidate = this.hash(candidate);
+			if (hashedCandidate.equals(hashedPassword)) {
+				solution = candidate;
+				this.combinationsOfPasswords = new ArrayList<>();
+				break;
+			}
+		}
+		return solution;
+	}
+
+	private void combinations(List<Character> chars, int length) {
+		Character[] universe =  chars.toArray(new Character[chars.size()]);
+		List<Character> combinations = new ArrayList<>();
+		recur(universe, combinations, length, 0, universe.length);
+	}
+
+	// TODO: rausschmeißen, doppelter Code mit Worker hash
+	private String hash(String line) {
+		try {
+			MessageDigest digest = MessageDigest.getInstance("SHA-256");
+			byte[] hashedBytes = digest.digest(String.valueOf(line).getBytes("UTF-8"));
+
+			StringBuffer stringBuffer = new StringBuffer();
+			for (int i = 0; i < hashedBytes.length; i++) {
+				stringBuffer.append(Integer.toString((hashedBytes[i] & 0xff) + 0x100, 16).substring(1));
+			}
+			return stringBuffer.toString();
+		}
+		catch (NoSuchAlgorithmException | UnsupportedEncodingException e) {
+			throw new RuntimeException(e.getMessage());
+		}
+	}
+
+
+
+
+	public void recur(Character[] A, List<Character> out,
+							 int k, int i, int n)
+	{
+		// base case: if combination size is k, print it
+		if (out.size() == k)
+		{
+			String str = out.stream().map(e->e.toString()).reduce((acc, e) -> acc  + e).get();
+			this.combinationsOfPasswords.add(str);
+			return;
+		}
+
+		// start from previous element in the current combination
+		// till last element
+		for (int j = 0; j < n; j++)
+		{
+			// add current element A[j] to the solution and recur with
+			// same index j (as repeated elements are allowed in combinations)
+			out.add(A[j]);
+			recur(A, out, k, j, n);
+
+			// backtrack - remove current element from solution
+			out.remove(out.size() - 1);
+		}
+	}
+
+
+
+
+
+
+
 }

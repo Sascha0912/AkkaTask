@@ -29,7 +29,7 @@ public class Worker extends AbstractLoggingActor {
 
 	// Get all the constants from the Master
 	private static final Character[] passwordCharsAsArray = Master.passwordCharsAsArray;
-	public static final ArrayList<Character> PASSWORD_CHARS = Master.PASSWORD_CHARS;
+	public static final ArrayList<Character> PASSWORD_CHARS = Master.passwordChars;
 	public static final Integer PASSWORD_LENGTH = Master.PASSWORD_LENGTH;
 
 	private TreeMap<String, String> cache = new TreeMap<>();
@@ -50,7 +50,7 @@ public class Worker extends AbstractLoggingActor {
 	public static class HintMessage implements Serializable {
 		private static final long serialVersionUID = 8343040842748609598L;
 		public String hint;
-		private Character symbolNotInUniverse;
+		public Character symbolNotInUniverse;
 		public ActorRef sender;
 		public List<Map<Character, Character[][]>> permutationRanges;
 
@@ -113,7 +113,7 @@ public class Worker extends AbstractLoggingActor {
 			Character[] startPermutation = permutations.get(key)[0];
 			Character[] endPermutation = permutations.get(key)[1];
 
-			System.out.println("WORKER " + this.self().path() + ": StartPermutation " + Arrays.toString(startPermutation));
+			//System.out.println("WORKER " + this.self().path() + ": StartPermutation " + Arrays.toString(startPermutation));
 			Character[] currentPermutation = startPermutation;
 
 			/*
@@ -163,7 +163,7 @@ public class Worker extends AbstractLoggingActor {
 				break;
 			}
 		}
-		System.out.println("WORKER " + self().path() + ": finished with task!");
+		//System.out.println("WORKER " + self().path() + ": finished with task!");
 	}
 
 	//TODO: handle dafür, dass das Password universum korrigiert wurde
