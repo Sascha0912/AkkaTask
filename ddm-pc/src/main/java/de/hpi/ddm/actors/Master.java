@@ -280,7 +280,7 @@ public class Master extends AbstractLoggingActor {
 		for (int i = 0; i < this.workers.size(); i++) {
 			this.workers.get(i).tell(
 					new Worker.HintMessage(
-							message.lines.get(currentLineInList)[currentColumnInList],
+							message.lines.get(currentLineInList)[++currentColumnInList],
 							mainMap.get(i),
 							null,
 							this.self()),
