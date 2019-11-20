@@ -137,7 +137,7 @@ public class Master extends AbstractLoggingActor {
 			//TODO: brute force pw
 
 			//System.out.println("PASSWORD UNIVERSE AFTER HINT-CRACKING: " + Arrays.toString(this.passwordChars.toArray()));
-			String password = this.bruteForce(this.passwordFile.get(currentLineInList)[2],
+			String password = this.bruteForce(this.passwordFile.get(currentLineInList)[4],
 												Integer.parseInt(this.passwordFile.get(currentLineInList)[3]));
 			System.out.println("MASTER FOUND PASSWORD: "+ password);
 			currentColumnInList = 5;
@@ -352,9 +352,11 @@ public class Master extends AbstractLoggingActor {
 		String solution = "";
 		this.combinations(this.passwordChars, length);
 		for (String candidate: this.combinationsOfPasswords) {
-			System.out.println(candidate);
+			//System.out.println(candidate);
 			String hashedCandidate = this.hash(candidate);
+			//System.out.println(hashedCandidate + " | " + hashedPassword);
 			if (hashedCandidate.equals(hashedPassword)) {
+				System.out.println("LÄSUNG GEFUNDÄNG");
 				solution = candidate;
 				this.combinationsOfPasswords = new ArrayList<>();
 				break;
