@@ -102,17 +102,21 @@ public class Worker extends AbstractLoggingActor {
 	private void handle(HintMessage message) {
 		//otherWorkerFoundSolution = false;
 		//System.out.println("MSG: " + message);
-
 		String hint = message.hint;
 		System.out.println("Worker " + this.self().path() + ": Received HintMessage with hint " + message.hint);
 		boolean found = false;
+		//System.out.println("message.hint: "+message.hint);
 		for (Map<Character, Character[][]> permutations : message.permutationRanges) {
 
+			System.out.println(message.permutationRanges);
 			Character key = (Character) permutations.keySet().toArray()[0]; //the symbol of the permutation range
-			//System.out.println("key: "+key);
+			System.out.println("key: "+key);
 			Character[] startPermutation = permutations.get(key)[0];
 			Character[] endPermutation = permutations.get(key)[1];
-
+			// Anmerkung:
+			// StartPermutation zu einem Key ist immer das erratene Passwort ohne diesen Key
+			System.out.println("StartPermutation: "+Arrays.toString(startPermutation));
+			System.out.println("EndPermutation: "+Arrays.toString(endPermutation));
 			//System.out.println("WORKER " + this.self().path() + ": StartPermutation " + Arrays.toString(startPermutation));
 			Character[] currentPermutation = startPermutation;
 
@@ -131,6 +135,8 @@ public class Worker extends AbstractLoggingActor {
 					for (int j = 0; j < currentPermutation.length; j++) {
 						candidate += currentPermutation[j];
 					}
+
+
 					//String hashedCandidate;
 					/*
 					if (this.cache.containsKey(candidate)) {
@@ -155,6 +161,7 @@ public class Worker extends AbstractLoggingActor {
 					} else {
 						//System.out.println("Current: "+Arrays.toString(currentPermutation));
 						Util.findNextPermutation(currentPermutation);
+						//message.permutationRanges = rangesCopy;
 					}
 				}
 			}

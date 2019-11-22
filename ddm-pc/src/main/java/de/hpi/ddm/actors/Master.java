@@ -30,7 +30,11 @@ public class Master extends AbstractLoggingActor {
 	private String hintReceived = "";
 	private List<String> combinationsOfPasswords = new ArrayList<>();
 
+	private List<String> crackedPasswords = new ArrayList<>();
+
 	Map<Integer, List<Map<Character,Character[][]>>> mainMap = new HashMap<>();
+	Map<Integer, List<Map<Character,Character[][]>>> mainMapCopy = new HashMap<>();
+	// Map<Character, Character[][]> originalInnerMap = new HashMap<>();
 
 	public static Props props(final ActorRef reader, final ActorRef collector) {
 		return Props.create(Master.class, () -> new Master(reader, collector));
@@ -45,21 +49,7 @@ public class Master extends AbstractLoggingActor {
 	////////////////////
 	// Actor Messages //
 	////////////////////
-	/*
-	@Data
-	public static class HintMessage implements Serializable {
-		private static final long serialVersionUID = 8343040942748609598L;
-		private String hint;
-		private char symbolNotInUniverse;
-		private ActorRef sender;
 
-		public HintMessage(String hint, char symbolNotInUniverse, ActorRef sender) {
-			this.hint = hint;
-			this.symbolNotInUniverse = symbolNotInUniverse;
-			this.sender = sender;
-		}
-	}
-	*/
 	@Data
 	public static class StartMessage implements Serializable {
 		private static final long serialVersionUID = -50374816448627600L;
@@ -125,6 +115,8 @@ public class Master extends AbstractLoggingActor {
 	protected void handle(Worker.HintMessage message) {
 		// a worker has successfully cracked a hint -> TODO: log it
 		this.log().info("Worker " + message.sender.path() + ": " + message.hint + " cracked and sent back to master");
+
+
 		if (hintReceived.equals("") || !hintReceived.equals(message.hint)) {
 			hintReceived=message.hint;
 			currentColumnInList++;
@@ -134,42 +126,45 @@ public class Master extends AbstractLoggingActor {
 		// System.out.println("MSG: "+message);
 		// HintMessage back to master -> jump to next line
 		if (passwordFile.get(0).length==currentColumnInList) {
-			//TODO: brute force pw
-
+			// reset mainMap to original state (original ranges)
+			//mainMap = clone(mainMapOriginal);
+			//System.out.println("mainMap: "+Arrays.toString(mainMap.get(0).get(0).get(0)));
+			//System.out.println("mainMapOrig: "+Arrays.toString(mainMapOriginal.get(0).get(0).get(0)));
 			//System.out.println("PASSWORD UNIVERSE AFTER HINT-CRACKING: " + Arrays.toString(this.passwordChars.toArray()));
 			String password = this.bruteForce(this.passwordFile.get(currentLineInList)[4],
 												Integer.parseInt(this.passwordFile.get(currentLineInList)[3]));
 			System.out.println("MASTER FOUND PASSWORD: "+ password);
+			crackedPasswords.add(password);
 			currentColumnInList = 5;
 			currentLineInList++;
 			this.passwordChars = new ArrayList(Arrays.asList(passwordCharsAsArray));
 		}
 		if (passwordFile.size()-1==currentLineInList){
 			System.out.println("finish");
+			// stop all workers and send passwords to the collector
 		}
 
 		ActorRef worker = message.sender;
-		try {
-			Thread.sleep(100);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		}
+
 		Worker.otherWorkerFoundSolution = false;
 		Worker.counterMessages++; // Hilfsvariable für Debugging
 
-		/*
-		Integer i = 0;
-		Pattern p = Pattern.compile("[0-9]+$");
-		Matcher m = p.matcher(worker.path().toString());
-		if(m.find()) {
-			i = Integer.parseInt(m.group());
-
-		}
-		*/
 		// System.out.println("Sending new message to worker " + i);
+
+		// Copy contains original permutationRanges
+		this.mainMap = clone(this.mainMapCopy);
+
+		System.out.println("MainMapCOpy: "+this.mainMapCopy.hashCode());
+		System.out.println("MAINMAP: " + this.mainMap.hashCode());
 		for (int i = 0; i < this.workers.size(); i++) {
+			System.out.println("CurentLine: "+currentLineInList);
+			System.out.println("CurrentColumn: "+currentColumnInList);
+			System.out.println("PasswordFile: "+this.passwordFile.get(currentLineInList)[currentColumnInList]);
+			//System.out.println("MainMap.get(i): "+message.permutationRanges.get(i));
+
 			Worker.HintMessage msg = new Worker.HintMessage(this.passwordFile.get(currentLineInList)[currentColumnInList],
 					this.mainMap.get(i),null, this.self());
+			System.out.println(msg.permutationRanges);
 			this.workers.get(i).tell(msg,this.self());
 		}
 
@@ -192,9 +187,6 @@ public class Master extends AbstractLoggingActor {
 
 		List<Integer> startIndices = new ArrayList<>();
 		List<Integer> endIndices = new ArrayList<>();
-
-		List<Character[]> startPermutations = new ArrayList<>();
-		List<Character[]> endPermutations = new ArrayList<>();
 
 
 		for (int i = 0; i < this.workers.size(); i++) {
@@ -283,44 +275,38 @@ public class Master extends AbstractLoggingActor {
 					//endPermutations.add(curPermutation);
 				}
 			}
+
 			workerId = 0;
 		}
 
-		System.out.println("MainMap: "+mainMap.toString());
+		// we are in the first iteration -> write permutationRanges to mainMapOriginal
+		/*
+		if (mainMapOriginal.isEmpty()){
+			System.out.println("MainMapOriginal empty - now cloning");
+			// System.out.println("mainMap: "+Arrays.toString(mainMap.get(0).get(0).get(0)));
+			// System.out.println("mainMapOrig: "+Arrays.toString(mainMapOriginal.get(0).get(0).get(0)));
+			mainMapOriginal = clone(mainMap);
+
+		}
+		*/
+
+		//System.out.println("MainMap: "+mainMap.toString());
+		this.mainMapCopy = clone(mainMap);
 		for (int i = 0; i < this.workers.size(); i++) {
+			System.out.println("CurrentLine: "+currentLineInList);
+			System.out.println("CurrentColumn: "+currentColumnInList);
+			System.out.println("PassWordFile: "+message.lines.get(currentLineInList)[currentColumnInList]);
+			System.out.println("MainMap.get(i): "+mainMap.get(i));
 			this.workers.get(i).tell(
 					new Worker.HintMessage(
-							message.lines.get(currentLineInList)[currentColumnInList],
+							this.passwordFile.get(currentLineInList)[currentColumnInList],
 							mainMap.get(i),
 							null,
 							this.self()),
 					this.self());
 		}
 	}
-	/*
-	public String convertWithIteration(Map<ActorPath, Character[][]> map) {
-		String mapAsString = "";
-		String values = "";
-		Character[] firstPermutation;
-		Character[] secondPermutation;
-		for (ActorPath key : map.keySet()) {
-			firstPermutation = map.get(key)[0];
-			secondPermutation = map.get(key)[1];
-			values = Arrays.toString(firstPermutation) + " | " + Arrays.toString(secondPermutation);
-			for (int i=0; i<firstPermutation.length; i++){
-				System.out.print(firstPermutation[i]+" ");
-			}
-			System.out.println();
-			for (int j=0; j<secondPermutation.length; j++){
-				System.out.print(secondPermutation[j]+" ");
-			}
-			System.out.println();
 
-			mapAsString += (key + ": " + values);
-		}
-		return mapAsString;
-	}
-	*/
 	protected void terminate() {
 		this.reader.tell(PoisonPill.getInstance(), ActorRef.noSender());
 		this.collector.tell(PoisonPill.getInstance(), ActorRef.noSender());
@@ -371,6 +357,8 @@ public class Master extends AbstractLoggingActor {
 		recur(universe, combinations, length, 0, universe.length);
 	}
 
+
+
 	// TODO: rausschmeißen, doppelter Code mit Worker hash
 	private String hash(String line) {
 		try {
@@ -388,8 +376,24 @@ public class Master extends AbstractLoggingActor {
 		}
 	}
 
+	public static Map<Integer, List<Map<Character, Character[][]>>> clone(Map<Integer, List<Map<Character, Character[][]>>> original) {
+		Map<Integer, List<Map<Character, Character[][]>>> copy = new HashMap<>();
 
-
+		for (int i = 0; i < original.size(); i++){
+			List<Map<Character, Character[][]>> li = new ArrayList<>();
+			for (Map<Character,Character[][]> ma : original.get(i)){
+				Map<Character,Character[][]> newMap = new HashMap<>();
+				for (Character c : ma.keySet()){
+					Character newC = c;
+					Character[][] newArr = ma.get(c).clone();
+					newMap.put(newC,newArr);
+				}
+				li.add(newMap);
+			}
+			copy.put(i,li);
+		}
+		return copy;
+	}
 
 	public void recur(Character[] A, List<Character> out,
 							 int k, int i, int n)
