@@ -35,6 +35,7 @@ public class Master extends AbstractLoggingActor {
 	Map<Integer, List<Map<Character,Character[][]>>> mainMap = new HashMap<>();
 	Map<Integer, List<Map<Character,Character[][]>>> mainMapCopy = new HashMap<>();
 	// Map<Character, Character[][]> originalInnerMap = new HashMap<>();
+	static int firstHint = 0;
 
 	public static Props props(final ActorRef reader, final ActorRef collector) {
 		return Props.create(Master.class, () -> new Master(reader, collector));
@@ -112,9 +113,9 @@ public class Master extends AbstractLoggingActor {
 		return n == 0 ? 1 : n * f( n - 1 );
 	}
 
-	protected void handle(Worker.HintMessage message) {
+	protected void handle(Worker.HintMessage message) throws InterruptedException {
 		// a worker has successfully cracked a hint -> TODO: log it
-		this.log().info("Worker " + message.sender.path() + ": " + message.hint + " cracked and sent back to master");
+		System.out.println("WORKER " + message.sender.path() + ": " + message.hint + " CRACKED");
 
 
 		if (hintReceived.equals("") || !hintReceived.equals(message.hint)) {
@@ -139,9 +140,27 @@ public class Master extends AbstractLoggingActor {
 			currentLineInList++;
 			this.passwordChars = new ArrayList(Arrays.asList(passwordCharsAsArray));
 		}
-		if (passwordFile.size()-1==currentLineInList){
+		if (passwordFile.size()==currentLineInList){
 			System.out.println("finish");
-			// stop all workers and send passwords to the collector
+
+			// Tell List of cracked passwords to the Collector (Master is Sender)
+
+			// Th
+			String messageToCollector = crackedPasswords.toString();
+			// Create a new CollectMessage to sent to the Collector
+			Collector.CollectMessage c = new Collector.CollectMessage();
+			// setResult is a new public method to set the content of a CollectMessage, because result is a private String
+			c.setResult(messageToCollector);
+			// Send all the cracked passwords to the collector
+			this.collector.tell(c, this.self());
+			// Tell the Collector to print out its collected message
+			this.collector.tell(new Collector.PrintMessage(),this.self());
+			// send PoisonPills to Reader, Collector, Workers and self (Master)
+			this.terminate();
+			// All passwords are cracked - no more line in the password file -> end method
+			return;
+			// This does not work -> execution is continued after 1 sec!!
+			//Thread.sleep(1000);
 		}
 
 		ActorRef worker = message.sender;
@@ -152,19 +171,20 @@ public class Master extends AbstractLoggingActor {
 		// System.out.println("Sending new message to worker " + i);
 
 		// Copy contains original permutationRanges
+
+		//System.out.println("HERE 1: "+Arrays.deepToString(mainMap.get(0).get(0).get('A')));
+		//System.out.println("HERE 2: "+Arrays.deepToString(mainMapCopy.get(0).get(0).get('A')));
+
 		this.mainMap = clone(this.mainMapCopy);
 
-		System.out.println("MainMapCOpy: "+this.mainMapCopy.hashCode());
-		System.out.println("MAINMAP: " + this.mainMap.hashCode());
+		//System.out.println("HERE 3: "+Arrays.deepToString(mainMap.get(0).get(0).get('A')));
+		//System.out.println("HERE 4: "+Arrays.deepToString(mainMapCopy.get(0).get(0).get('A')));
+
 		for (int i = 0; i < this.workers.size(); i++) {
-			System.out.println("CurentLine: "+currentLineInList);
-			System.out.println("CurrentColumn: "+currentColumnInList);
-			System.out.println("PasswordFile: "+this.passwordFile.get(currentLineInList)[currentColumnInList]);
-			//System.out.println("MainMap.get(i): "+message.permutationRanges.get(i));
 
 			Worker.HintMessage msg = new Worker.HintMessage(this.passwordFile.get(currentLineInList)[currentColumnInList],
 					this.mainMap.get(i),null, this.self());
-			System.out.println(msg.permutationRanges);
+			//System.out.println(msg.permutationRanges);
 			this.workers.get(i).tell(msg,this.self());
 		}
 
@@ -280,23 +300,21 @@ public class Master extends AbstractLoggingActor {
 		}
 
 		// we are in the first iteration -> write permutationRanges to mainMapOriginal
-		/*
-		if (mainMapOriginal.isEmpty()){
-			System.out.println("MainMapOriginal empty - now cloning");
-			// System.out.println("mainMap: "+Arrays.toString(mainMap.get(0).get(0).get(0)));
-			// System.out.println("mainMapOrig: "+Arrays.toString(mainMapOriginal.get(0).get(0).get(0)));
-			mainMapOriginal = clone(mainMap);
-
-		}
-		*/
 
 		//System.out.println("MainMap: "+mainMap.toString());
-		this.mainMapCopy = clone(mainMap);
+		if (firstHint==0){
+			//System.out.println("MainCopy changed");
+			this.mainMapCopy = clone(mainMap);
+			firstHint=1;
+		}
+
+
 		for (int i = 0; i < this.workers.size(); i++) {
-			System.out.println("CurrentLine: "+currentLineInList);
-			System.out.println("CurrentColumn: "+currentColumnInList);
-			System.out.println("PassWordFile: "+message.lines.get(currentLineInList)[currentColumnInList]);
-			System.out.println("MainMap.get(i): "+mainMap.get(i));
+			//System.out.println("CurrentLine: "+currentLineInList);
+			//System.out.println("CurrentColumn: "+currentColumnInList);
+			//System.out.println("PassWordFile: "+message.lines.get(currentLineInList)[currentColumnInList]);
+			//System.out.println("MainMap.get(i): "+Arrays.deepToString(mainMap.get(i).get(0).get('A')));
+			//System.out.println("MAINMAPCOPY.get(i): "+Arrays.deepToString(mainMapCopy.get(i).get(0).get('A')));
 			this.workers.get(i).tell(
 					new Worker.HintMessage(
 							this.passwordFile.get(currentLineInList)[currentColumnInList],

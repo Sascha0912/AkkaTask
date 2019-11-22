@@ -103,23 +103,22 @@ public class Worker extends AbstractLoggingActor {
 		//otherWorkerFoundSolution = false;
 		//System.out.println("MSG: " + message);
 		String hint = message.hint;
-		System.out.println("Worker " + this.self().path() + ": Received HintMessage with hint " + message.hint);
+		System.out.println("WORKER " + this.self().path() + ": RECEIVED HINT " + message.hint);
 		boolean found = false;
 		//System.out.println("message.hint: "+message.hint);
 		for (Map<Character, Character[][]> permutations : message.permutationRanges) {
 
-			System.out.println(message.permutationRanges);
+			//System.out.println(message.permutationRanges);
 			Character key = (Character) permutations.keySet().toArray()[0]; //the symbol of the permutation range
-			System.out.println("key: "+key);
-			Character[] startPermutation = permutations.get(key)[0];
-			Character[] endPermutation = permutations.get(key)[1];
+			//System.out.println("key: "+key);
+			Character[] startPermutation = permutations.get(key)[0].clone(); //referenzen --> copy
+			Character[] endPermutation = permutations.get(key)[1].clone(); //referenzen --> copys machen
 			// Anmerkung:
 			// StartPermutation zu einem Key ist immer das erratene Passwort ohne diesen Key
-			System.out.println("StartPermutation: "+Arrays.toString(startPermutation));
-			System.out.println("EndPermutation: "+Arrays.toString(endPermutation));
-			//System.out.println("WORKER " + this.self().path() + ": StartPermutation " + Arrays.toString(startPermutation));
+			//System.out.println("StartPermutation: "+Arrays.toString(startPermutation));
+			//System.out.println("EndPermutation: "+Arrays.toString(endPermutation));
+			System.out.println("WORKER " + this.self().path() + ": [" + Arrays.toString(startPermutation) + ", " + Arrays.toString(endPermutation) + "]");
 			Character[] currentPermutation = startPermutation;
-
 			/*
 			TODO: momentan läuft nach der ersten Hint nurnoch Worker 1 und berechnet Kombinationen!
 			--> Worker neu starten?
@@ -136,16 +135,6 @@ public class Worker extends AbstractLoggingActor {
 						candidate += currentPermutation[j];
 					}
 
-
-					//String hashedCandidate;
-					/*
-					if (this.cache.containsKey(candidate)) {
-						hashedCandidate = this.cache.get(candidate);
-					} else {
-						hashedCandidate = this.hash(candidate);
-						this.cache.put(candidate, hashedCandidate);
-					}
-					*/
 					//if (counterMessages == 1) { //Debugging
 					//	System.out.println("WORKER " + this.self().path() + ": " + candidate);
 					//}
@@ -216,43 +205,4 @@ public class Worker extends AbstractLoggingActor {
 			throw new RuntimeException(e.getMessage());
 		}
 	}
-	
-	// Generating all permutations of an array using Heap's Algorithm
-	// https://en.wikipedia.org/wiki/Heap's_algorithm
-	// https://www.geeksforgeeks.org/heaps-algorithm-for-generating-permutations/
-	private void heapPermutation(char[] a, int size, int n, List<String> l) {
-		// If size is 1, store the obtained permutation
-		if (size == 1)
-			l.add(new String(a));
-
-		for (int i = 0; i < size; i++) {
-			heapPermutation(a, size - 1, n, l);
-
-			// If size is odd, swap first and last element
-			if (size % 2 == 1) {
-				char temp = a[0];
-				a[0] = a[size - 1];
-				a[size - 1] = temp;
-			}
-
-			// If size is even, swap i-th and last element
-			else {
-				char temp = a[i];
-				a[i] = a[size - 1];
-				a[size - 1] = temp;
-			}
-		}
-	}
-
-
-
-	
-
-
-
-
-
-
-
-
 }
