@@ -34,8 +34,8 @@ public class Master extends AbstractLoggingActor {
 
 	Map<Integer, List<Map<Character,Character[][]>>> mainMap = new HashMap<>();
 	Map<Integer, List<Map<Character,Character[][]>>> mainMapCopy = new HashMap<>();
-	// Map<Character, Character[][]> originalInnerMap = new HashMap<>();
-	static int firstHint = 0;
+
+	//static int firstHint = 0;
 
 	public static Props props(final ActorRef reader, final ActorRef collector) {
 		return Props.create(Master.class, () -> new Master(reader, collector));
@@ -124,14 +124,9 @@ public class Master extends AbstractLoggingActor {
 			this.passwordChars.remove(message.symbolNotInUniverse);
 			//System.out.println("Column inc: "+currentColumnInList);
 		}
-		// System.out.println("MSG: "+message);
 		// HintMessage back to master -> jump to next line
 		if (passwordFile.get(0).length==currentColumnInList) {
-			// reset mainMap to original state (original ranges)
-			//mainMap = clone(mainMapOriginal);
-			//System.out.println("mainMap: "+Arrays.toString(mainMap.get(0).get(0).get(0)));
-			//System.out.println("mainMapOrig: "+Arrays.toString(mainMapOriginal.get(0).get(0).get(0)));
-			//System.out.println("PASSWORD UNIVERSE AFTER HINT-CRACKING: " + Arrays.toString(this.passwordChars.toArray()));
+
 			String password = this.bruteForce(this.passwordFile.get(currentLineInList)[4],
 												Integer.parseInt(this.passwordFile.get(currentLineInList)[3]));
 			System.out.println("MASTER FOUND PASSWORD: "+ password);
@@ -141,11 +136,12 @@ public class Master extends AbstractLoggingActor {
 			this.passwordChars = new ArrayList(Arrays.asList(passwordCharsAsArray));
 		}
 		if (passwordFile.size()==currentLineInList){
-			System.out.println("finish");
+			this.log().info("Finished cracking the Passwords!");
+			this.log().info("Sending them to the Collector...");
 
 			// Tell List of cracked passwords to the Collector (Master is Sender)
 
-			// Th
+			// The Message to be delivered to the Collector (String - contains the PasswordList)
 			String messageToCollector = crackedPasswords.toString();
 			// Create a new CollectMessage to sent to the Collector
 			Collector.CollectMessage c = new Collector.CollectMessage();
@@ -295,18 +291,17 @@ public class Master extends AbstractLoggingActor {
 					//endPermutations.add(curPermutation);
 				}
 			}
-
 			workerId = 0;
 		}
 
 		// we are in the first iteration -> write permutationRanges to mainMapOriginal
 
 		//System.out.println("MainMap: "+mainMap.toString());
-		if (firstHint==0){
+		//if (firstHint==0){
 			//System.out.println("MainCopy changed");
 			this.mainMapCopy = clone(mainMap);
-			firstHint=1;
-		}
+			//firstHint=1;
+		//}
 
 
 		for (int i = 0; i < this.workers.size(); i++) {
@@ -375,8 +370,6 @@ public class Master extends AbstractLoggingActor {
 		recur(universe, combinations, length, 0, universe.length);
 	}
 
-
-
 	// TODO: rausschmeißen, doppelter Code mit Worker hash
 	private String hash(String line) {
 		try {
@@ -437,11 +430,4 @@ public class Master extends AbstractLoggingActor {
 			out.remove(out.size() - 1);
 		}
 	}
-
-
-
-
-
-
-
 }

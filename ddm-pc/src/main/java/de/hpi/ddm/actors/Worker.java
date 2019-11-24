@@ -104,25 +104,35 @@ public class Worker extends AbstractLoggingActor {
 		//System.out.println("MSG: " + message);
 		String hint = message.hint;
 		System.out.println("WORKER " + this.self().path() + ": RECEIVED HINT " + message.hint);
+		// Print out the permutation ranges
+		/*
+		for (int i = 0; i < message.permutationRanges.size(); i++){
+			//List<Map<Character, Character[][]>> li = new ArrayList<>();
+			for (Map.Entry<Character, Character[][]> entry : message.permutationRanges.get(i).entrySet()) {
+				Character key = entry.getKey();
+				Character[][] value = entry.getValue();
+				System.out.println(key+" : "+Arrays.deepToString(value));
+			}
+		}
+
+		 */
+
+
+
+		//System.out.println(message.permutationRanges);
 		boolean found = false;
+		//System.out.println("Character: "+Arrays.deepToString(message.permutationRanges.get(0).get('A')));
 		//System.out.println("message.hint: "+message.hint);
 		for (Map<Character, Character[][]> permutations : message.permutationRanges) {
 
 			//System.out.println(message.permutationRanges);
 			Character key = (Character) permutations.keySet().toArray()[0]; //the symbol of the permutation range
 			//System.out.println("key: "+key);
-			Character[] startPermutation = permutations.get(key)[0].clone(); //referenzen --> copy
-			Character[] endPermutation = permutations.get(key)[1].clone(); //referenzen --> copys machen
+			Character[] startPermutation = permutations.get(key)[0].clone(); //referenzen --> clone
+			Character[] endPermutation = permutations.get(key)[1].clone(); //referenzen --> clone
 			// Anmerkung:
 			// StartPermutation zu einem Key ist immer das erratene Passwort ohne diesen Key
-			//System.out.println("StartPermutation: "+Arrays.toString(startPermutation));
-			//System.out.println("EndPermutation: "+Arrays.toString(endPermutation));
-			System.out.println("WORKER " + this.self().path() + ": [" + Arrays.toString(startPermutation) + ", " + Arrays.toString(endPermutation) + "]");
 			Character[] currentPermutation = startPermutation;
-			/*
-			TODO: momentan läuft nach der ersten Hint nurnoch Worker 1 und berechnet Kombinationen!
-			--> Worker neu starten?
-			 */
 			//System.out.println("WORKER " + this.self().path() + ": CURRENT PERMUTATION: " + Arrays.toString(currentPermutation));
 			while (!found && (!Arrays.equals(currentPermutation, endPermutation))) {
 				if (otherWorkerFoundSolution) {
