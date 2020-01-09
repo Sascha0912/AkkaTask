@@ -2,4 +2,7 @@ ddm-lmp/.idea/
 ddm-lmp/target/
 ddm-pc/.idea/
 ddm-pc/target/
+spark-tutorial-master/.idea/
+spark-tutorial-master/target/
+spark-tutorial-master/data/
 .DS_Store
